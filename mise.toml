@@ -1,0 +1,44 @@
+[settings]
+experimental = true
+pin = true
+minimum_release_age = "3d"
+lockfile = true
+
+[tools]
+"aqua:dprint/dprint" = "0.63.0"
+"aqua:jdx/hk" = "2.7.0"
+"aqua:pnpm/pnpm" = "12.14.0"
+"github:rwx-cloud/rwx" = "3.36.1"
+"core:node" = "24.22.0"
+
+[deps.pnpm]
+auto = true
+
+[hooks]
+postinstall = ["hk install --mise"]
+
+[tasks.check]
+description = "Run every formatter and linter in report-only mode."
+run = "hk check --all"
+
+[tasks.fix]
+description = "Apply every formatter and auto-fixable lint."
+run = "hk fix --all"
+
+[tasks.test]
+description = "Run the unit tests."
+run = "pnpm exec vp test run"
+
+[tasks.verify]
+description = "Every check a change must pass before it merges."
+depends = ["check", "test"]
+
+[tasks."worker:types"]
+description = "Regenerate the Worker's binding types after editing wrangler.jsonc."
+dir = "apps/worker"
+run = "pnpm exec wrangler types"
+
+[tasks."worker:dev"]
+description = "Run the Worker locally against local D1, R2, and Queues."
+dir = "apps/worker"
+run = "pnpm exec wrangler d1 migrations apply docket --local && pnpm exec wrangler dev"

@@ -1,0 +1,21 @@
+// Drives pre-commit, `mise run check`, and `mise run fix`. Top-level steps create all three hooks.
+
+amends "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl"
+
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+
+steps {
+  ["dprint"] = (Builtins.dprint) { exclusive = true }
+  ["vp-check"] {
+    glob = List("**/*.ts", "**/*.tsx")
+    exclude = List("apps/worker/worker-configuration.d.ts")
+    check = "pnpm exec vp check --no-fmt"
+    fix = "pnpm exec vp check --no-fmt --fix"
+    exclusive = true
+  }
+  ["tsc"] {
+    glob = List("**/*.ts", "**/*.tsx", "**/tsconfig*.json")
+    check = "pnpm exec tsc --build --noEmit"
+    exclusive = true
+  }
+}

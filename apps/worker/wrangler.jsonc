@@ -1,0 +1,41 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "docket",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "GITHUB_APP_ID": "",
+    "JEV_MODEL": "jev-latest",
+    "DAILY_TOKENS": "5000000",
+    "PRIVATE_ALLOWLIST": "sargunv"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "docket",
+      "database_id": "local",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [{ "binding": "STATES", "bucket_name": "docket-states" }],
+  "queues": {
+    "producers": [{ "binding": "JOBS", "queue": "docket-jobs" }],
+    "consumers": [
+      {
+        "queue": "docket-jobs",
+        "max_batch_size": 10,
+        "max_retries": 5,
+        "dead_letter_queue": "docket-jobs-dlq"
+      }
+    ]
+  },
+  "secrets": {
+    "required": [
+      "GITHUB_PRIVATE_KEY",
+      "GITHUB_WEBHOOK_SECRET",
+      "TYPESAFE_API_KEY"
+    ]
+  }
+}
