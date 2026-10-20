@@ -56,7 +56,7 @@ describe("webhookEffects", () => {
         ...payload(),
         action: "unlabeled",
         label: { name: "bug" },
-        sender: { login: "docket[bot]", type: "Bot" },
+        sender: { login: "rubberstamp[bot]", type: "Bot" },
       },
       policy,
     );
@@ -67,7 +67,7 @@ describe("webhookEffects", () => {
         number: 13,
         label: "bug",
         action: "unlabeled",
-        actor: "docket[bot]",
+        actor: "rubberstamp[bot]",
         actorIsBot: true,
         at: "2026-10-20T00:00:00Z",
       },

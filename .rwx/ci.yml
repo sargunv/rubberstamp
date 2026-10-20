@@ -16,7 +16,7 @@ tasks:
   - key: code
     call: git/clone 2.2.0
     with:
-      repository: https://github.com/sargunv/docket.git
+      repository: https://github.com/sargunv/rubberstamp.git
       ref: ${{ init.commit-sha }}
       github-token: ${{ github.token }}
       # hk lists the repository's files through git.

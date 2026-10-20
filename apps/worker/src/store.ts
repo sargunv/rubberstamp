@@ -1,4 +1,4 @@
-import type { Json, LabelDecision } from "@docket/core";
+import type { Json, LabelDecision } from "@sargunv/rubberstamp-core";
 
 export type LabelRun = {
   repoId: number;

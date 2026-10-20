@@ -41,4 +41,4 @@ run = "pnpm exec wrangler types"
 [tasks."worker:dev"]
 description = "Run the Worker locally against local D1, R2, and Queues."
 dir = "apps/worker"
-run = "pnpm exec wrangler d1 migrations apply docket --local && pnpm exec wrangler dev"
+run = "pnpm exec wrangler d1 migrations apply rubberstamp --local && pnpm exec wrangler dev"

@@ -1,8 +1,9 @@
 # Design
 
-Docket is a GitHub App. Onboarding a repository means installing the app and
-adding `.github/docket.yml`. Nothing else lives in the repository except, for CI
-selection, one action step and the `if:` conditions on gated jobs.
+Rubberstamp is a GitHub App. Onboarding a repository means installing the app
+and adding `.github/rubberstamp.yml`. Nothing else lives in the repository
+except, for CI selection, one action step and the `if:` conditions on gated
+jobs.
 
 It grew out of the Python scripts in `maplibre/maplibre-native-ffi`
 (`ci/label.py`, `ci/select.py`, and their evals). Those needed a TypeSafe API
@@ -12,7 +13,7 @@ and every repository needed its own copy of the machinery.
 ## Configuration
 
 ```yaml
-# .github/docket.yml
+# .github/rubberstamp.yml
 context: |
   What this repository is, for every judgment.
 
@@ -52,7 +53,7 @@ workflow step.
 
 Every run stores its state in R2 and its answers in D1, keyed by state hash,
 question hash, and answering model. Every `labeled` and `unlabeled` event is
-recorded, so a person correcting docket's labels produces a backtest case.
+recorded, so a person correcting Rubberstamp's labels produces a backtest case.
 
 ## CI selection (planned)
 
@@ -100,18 +101,18 @@ TypeSafe organization's tokens-per-second rate limit.
 5. A fast tier of ~30 informative cases (near the threshold, or currently wrong)
    returns first; the full corpus fills in behind it.
 
-Ground truth: labels people applied, corrections to docket's labels, and for CI,
-units that failed on main after the pull request's plan skipped them. Cases live
-in D1. Maintainers mark `must` and `ok` in the UI.
+Ground truth: labels people applied, corrections to Rubberstamp's labels, and
+for CI, units that failed on main after the pull request's plan skipped them.
+Cases live in D1. Maintainers mark `must` and `ok` in the UI.
 
 ## Limits
 
 Public repositories are free; private ones need their owner on the allowlist.
-Each installation has a daily Jev token budget. Over budget, docket adds no
+Each installation has a daily Jev token budget. Over budget, Rubberstamp adds no
 labels and plans every unit.
 
 ## Stack
 
 TypeScript throughout. Cloudflare Workers with Hono, Queues, D1, R2, and Durable
 Objects. The web UI is React with TanStack Router and Query, tRPC, Tailwind, and
-Base UI, served from the same Worker. Served at `docket.sargunv.dev`.
+Base UI, served from the same Worker. Served at `rubberstamp.sargunv.dev`.

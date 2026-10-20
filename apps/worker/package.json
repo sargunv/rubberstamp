@@ -1,5 +1,5 @@
 {
-  "name": "@docket/worker",
+  "name": "@sargunv/rubberstamp-worker",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "types": "wrangler types"
   },
   "dependencies": {
-    "@docket/core": "workspace:*",
+    "@sargunv/rubberstamp-core": "workspace:*",
     "hono": "^4.13.0",
     "valibot": "catalog:"
   },

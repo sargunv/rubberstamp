@@ -38,7 +38,7 @@ CREATE TABLE label_runs (
 );
 CREATE INDEX label_runs_item ON label_runs (repo_id, number);
 
--- Every label change on an item, so corrections to docket's labels become
+-- Every label change on an item, so corrections to Rubberstamp's labels become
 -- backtest cases.
 CREATE TABLE label_events (
   repo_id INTEGER NOT NULL,

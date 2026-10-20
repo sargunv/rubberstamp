@@ -1,4 +1,4 @@
-# docket
+# Rubberstamp
 
 A GitHub App for code-review-adjacent automation, starting with Jev-based issue
 and pull request labeling, then CI coverage selection. Free for open source;
@@ -27,11 +27,11 @@ docs/design.md  the product design and the decisions behind it
 
 ## Project invariants
 
-- Configuration lives in each repository at `.github/docket.yml` and is read
-  from the default branch only. A pull request can never change how it is
+- Configuration lives in each repository at `.github/rubberstamp.yml` and is
+  read from the default branch only. A pull request can never change how it is
   judged.
-- Docket builds every Jev state and question itself from GitHub data and that
-  configuration. Nothing a caller sends becomes a question.
+- Rubberstamp builds every Jev state and question itself from GitHub data and
+  that configuration. Nothing a caller sends becomes a question.
 - Decision logic in `packages/core` stays pure and runtime-agnostic so the web
   UI can re-run it over cached answers without inference.
 - Answers are cached per (state hash, question hash, answering model version).

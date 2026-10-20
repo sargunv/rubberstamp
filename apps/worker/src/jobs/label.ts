@@ -10,7 +10,7 @@ import {
   type LabelDecision,
   type Request,
   type Response,
-} from "@docket/core";
+} from "@sargunv/rubberstamp-core";
 
 import type { RepoApi } from "../github/client.ts";
 import type { CachedAnswer, Store } from "../store.ts";

@@ -1,7 +1,7 @@
 import * as v from "valibot";
 import { parse as parseYaml } from "yaml";
 
-export const CONFIG_PATH = ".github/docket.yml";
+export const CONFIG_PATH = ".github/rubberstamp.yml";
 
 const Text = v.pipe(v.string(), v.trim(), v.nonEmpty());
 const Threshold = v.pipe(v.number(), v.minValue(0), v.maxValue(1));

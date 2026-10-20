@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "docket",
+  "name": "rubberstamp",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
@@ -14,20 +14,20 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "docket",
+      "database_name": "rubberstamp",
       "database_id": "local",
       "migrations_dir": "migrations"
     }
   ],
-  "r2_buckets": [{ "binding": "STATES", "bucket_name": "docket-states" }],
+  "r2_buckets": [{ "binding": "STATES", "bucket_name": "rubberstamp-states" }],
   "queues": {
-    "producers": [{ "binding": "JOBS", "queue": "docket-jobs" }],
+    "producers": [{ "binding": "JOBS", "queue": "rubberstamp-jobs" }],
     "consumers": [
       {
-        "queue": "docket-jobs",
+        "queue": "rubberstamp-jobs",
         "max_batch_size": 10,
         "max_retries": 5,
-        "dead_letter_queue": "docket-jobs-dlq"
+        "dead_letter_queue": "rubberstamp-jobs-dlq"
       }
     ]
   },

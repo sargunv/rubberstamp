@@ -1,4 +1,4 @@
-import type { Request, Response } from "@docket/core";
+import type { Request, Response } from "@sargunv/rubberstamp-core";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { Issue, RepoApi } from "../github/client.ts";

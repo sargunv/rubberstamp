@@ -203,7 +203,7 @@ importers:
 
   apps/worker:
     dependencies:
-      '@docket/core':
+      '@sargunv/rubberstamp-core':
         specifier: workspace:*
         version: link:../../packages/core
       hono:

@@ -1,4 +1,4 @@
-import { ask, type Request } from "@docket/core";
+import { ask, type Request } from "@sargunv/rubberstamp-core";
 import { Hono } from "hono";
 import * as v from "valibot";
 
@@ -28,7 +28,7 @@ function policy(env: Env): Policy {
 
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/", (c) => c.text("docket"));
+app.get("/", (c) => c.text("rubberstamp"));
 
 app.post("/webhooks/github", async (c) => {
   const body = await c.req.text();

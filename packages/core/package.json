@@ -1,5 +1,5 @@
 {
-  "name": "@docket/core",
+  "name": "@sargunv/rubberstamp-core",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },

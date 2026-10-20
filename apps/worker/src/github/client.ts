@@ -1,4 +1,8 @@
-import { CONFIG_PATH, type PullFile, type RepoLabel } from "@docket/core";
+import {
+  CONFIG_PATH,
+  type PullFile,
+  type RepoLabel,
+} from "@sargunv/rubberstamp-core";
 import * as v from "valibot";
 
 import { appJwt } from "./auth.ts";
@@ -41,7 +45,7 @@ const File = v.object({
 
 export type Issue = v.InferOutput<typeof Issue>;
 
-/** The calls docket makes against one repository. */
+/** The calls Rubberstamp makes against one repository. */
 export interface RepoApi {
   readonly fullName: string;
   config(): Promise<string | null>;
@@ -83,7 +87,7 @@ export class GitHubApp {
         headers: {
           Accept: init.accept ?? "application/vnd.github+json",
           Authorization: `Bearer ${await auth()}`,
-          "User-Agent": "docket",
+          "User-Agent": "rubberstamp",
           "X-GitHub-Api-Version": "2022-11-28",
           ...(init.body === undefined
             ? {}
