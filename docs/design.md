@@ -19,24 +19,28 @@ context: |
 labels:
   context: Extra context for labeling only. # optional
   groups:
-    kind: { pick: one, required: true, labels: [bug, feature, perf, chore] }
-    area: { required: true, labels: ["area:*"] }
+    kind: { min: 1, max: 1, labels: [bug, feature, perf, chore] }
+    area: { min: 1, labels: ["area:*"] }
     binding:
       labels: ["binding:*"]
       rule: Only when the work is specific to this binding.
       threshold: 0.8 # optional; tuned in the UI
+    platform: { labels: ["platform:*"], max: 2 }
   describe: # only where GitHub's 100-character description isn't enough
     area:upstream: A patch carried under `patches/`, or a submodule bump.
 ```
 
 - A label's meaning is its GitHub description unless `describe` overrides it.
-- `pick: one` asks one Choice over the group's labels; a group that isn't
-  `required` also gets a "none of these" option. `pick: any` (the default) asks
-  one Noul per label.
+- A group with `max: 1` and at least two labels asks one Choice over them, so
+  its labels compete as mutually exclusive options; with `min: 0` the Choice
+  also offers "none of these". Every other group asks one Noul per label.
 - A group gets labels only when it has none, so a label that a template, a bot,
-  or a person set always wins. A `required` group gets its most likely label
-  when none passes the threshold.
-- Default thresholds are 0.5 for `pick: one` and 0.8 for `pick: any`.
+  or a person set always wins.
+- Labels at or above the threshold pass. The most likely of the rest fill the
+  group to its `min` (default 0), and the least likely passing labels are cut to
+  its `max` (default unlimited).
+- Default thresholds are 0.5 for a Choice, where probabilities compete, and 0.8
+  for Nouls.
 
 ## Labels
 

@@ -5,14 +5,24 @@ export const CONFIG_PATH = ".github/docket.yml";
 
 const Text = v.pipe(v.string(), v.trim(), v.nonEmpty());
 const Threshold = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
+const Count = v.pipe(v.number(), v.integer(), v.minValue(0));
 
-const LabelGroup = v.strictObject({
-  labels: v.pipe(v.array(Text), v.minLength(1)),
-  pick: v.optional(v.picklist(["one", "any"]), "any"),
-  required: v.optional(v.boolean(), false),
-  rule: v.optional(Text),
-  threshold: v.optional(Threshold),
-});
+const LabelGroup = v.pipe(
+  v.strictObject({
+    labels: v.pipe(v.array(Text), v.minLength(1)),
+    min: v.optional(Count, 0),
+    max: v.optional(v.pipe(Count, v.minValue(1))),
+    rule: v.optional(Text),
+    threshold: v.optional(Threshold),
+  }),
+  v.forward(
+    v.check(
+      (group) => group.max === undefined || group.min <= group.max,
+      "min must not exceed max",
+    ),
+    ["min"],
+  ),
+);
 
 const LabelsSection = v.strictObject({
   context: v.optional(Text),

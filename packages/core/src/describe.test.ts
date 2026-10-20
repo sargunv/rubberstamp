@@ -69,6 +69,21 @@ describe("describeItem", () => {
     expect(described["patch"]).toMatch(/the rest of the diff is omitted\]\n$/);
   });
 
+  it("names submodule moves in the file list", () => {
+    expect(
+      fileList([
+        {
+          filename: "third_party/maplibre-native",
+          status: "modified",
+          additions: 1,
+          deletions: 1,
+          patch:
+            "@@ -1 +1 @@\n-Subproject commit b18b5efff6dfb9868489be36100bed6093c7d396\n+Subproject commit 6f75ff093780c4bffa34a4474cf2506028f659f1",
+        },
+      ]),
+    ).toEqual(["M third_party/maplibre-native (submodule b18b5ef → 6f75ff0)"]);
+  });
+
   it("caps the file list", () => {
     const files = Array.from({ length: 2000 }, (_, index) => ({
       filename: `some/long/directory/name/file-${index}.ts`,

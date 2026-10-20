@@ -8,8 +8,10 @@ export type ResolvedLabel = { name: string; meaning: string };
 
 export type ResolvedGroup = {
   id: string;
-  pick: "one" | "any";
-  required: boolean;
+  /** One Choice over the labels, rather than one Noul per label. */
+  choice: boolean;
+  min: number;
+  max: number | undefined;
   rule: string | undefined;
   threshold: number;
   labels: ResolvedLabel[];
@@ -17,7 +19,9 @@ export type ResolvedGroup = {
 
 export type Resolution = { groups: ResolvedGroup[]; warnings: string[] };
 
-const DEFAULT_THRESHOLD = { one: 0.5, any: 0.8 };
+// A Choice's probabilities compete, so 0.5 already means "more likely than
+// every other option combined". Nouls are independent.
+const DEFAULT_THRESHOLD = { choice: 0.5, noul: 0.8 };
 export const NONE = "none of these";
 
 function matcher(pattern: string): (name: string) => boolean {
@@ -76,12 +80,20 @@ export function resolveLabels(
       }
     }
     if (labels.length === 0) continue;
+    if (group.min > labels.length) {
+      warnings.push(
+        `Group ${id} needs ${group.min} labels but only ${labels.length} exist.`,
+      );
+    }
+    const choice = group.max === 1 && labels.length > 1;
     groups.push({
       id,
-      pick: group.pick,
-      required: group.required,
+      choice,
+      min: group.min,
+      max: group.max,
       rule: group.rule === undefined ? undefined : squash(group.rule),
-      threshold: group.threshold ?? DEFAULT_THRESHOLD[group.pick],
+      threshold:
+        group.threshold ?? DEFAULT_THRESHOLD[choice ? "choice" : "noul"],
       labels,
     });
   }
@@ -108,11 +120,11 @@ export function labelQuestions(
   const questions: Record<string, Question> = {};
   for (const group of groups) {
     const rule: Record<string, Json> = group.rule ? { rule: group.rule } : {};
-    if (group.pick === "one") {
+    if (group.choice) {
       const criteria: Record<string, Json> = Object.fromEntries(
         group.labels.map((label) => [label.name, label.meaning || label.name]),
       );
-      if (!group.required) {
+      if (group.min === 0) {
         criteria[NONE] = "None of these labels describes this work.";
       }
       questions[groupQuestionKey(group)] = {
@@ -159,7 +171,7 @@ export function labelScores(
 ): Scores {
   const scores: Scores = {};
   for (const group of groups) {
-    if (group.pick === "one") {
+    if (group.choice) {
       const answer = answers[groupQuestionKey(group)];
       for (const label of group.labels) {
         scores[label.name] =
@@ -182,12 +194,14 @@ export type LabelDecision = {
   group: string;
   add: boolean;
   score: number;
-  rule: "" | "present" | "group labeled" | "most likely";
+  rule: "" | "present" | "group labeled" | "filled to min" | "cut by max";
 };
 
 /**
  * Decide which labels to add. A group gets labels only when it has none, so a
- * label that a template, a bot, or a person set always wins.
+ * label that a template, a bot, or a person set always wins. Labels at or above
+ * the threshold pass; the most likely of the rest fill the group to its `min`,
+ * and the least likely passing ones are cut to its `max`.
  */
 export function decideLabels(
   groups: ResolvedGroup[],
@@ -214,18 +228,22 @@ export function decideLabels(
       continue;
     }
     const threshold = thresholds[group.id] ?? group.threshold;
-    const best = group.labels.reduce((a, b) => (score(b) > score(a) ? b : a));
-    let passing = group.labels.filter((label) => score(label) >= threshold);
-    if (group.pick === "one") passing = passing.includes(best) ? [best] : [];
-    const fallback = group.required && passing.length === 0;
+    const ranked = [...group.labels].sort((a, b) => score(b) - score(a));
+    const passing = ranked.filter((label) => score(label) >= threshold);
+    const kept = new Set(passing.slice(0, group.max));
+    const filled = new Set(
+      ranked
+        .filter((label) => !kept.has(label))
+        .slice(0, Math.max(0, group.min - kept.size)),
+    );
     for (const label of group.labels) {
-      const chosen = fallback && label === best;
+      const cut = passing.includes(label) && !kept.has(label);
       decisions.push({
         label: label.name,
         group: group.id,
-        add: chosen || passing.includes(label),
+        add: kept.has(label) || filled.has(label),
         score: score(label),
-        rule: chosen ? "most likely" : "",
+        rule: filled.has(label) ? "filled to min" : cut ? "cut by max" : "",
       });
     }
   }

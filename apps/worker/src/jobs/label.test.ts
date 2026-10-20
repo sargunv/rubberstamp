@@ -9,7 +9,7 @@ const CONFIG = `
 context: A C API for MapLibre Native.
 labels:
   groups:
-    kind: { pick: one, required: true, labels: [bug, feature] }
+    kind: { min: 1, max: 1, labels: [bug, feature] }
     area: { labels: ["area:*"] }
 `;
 

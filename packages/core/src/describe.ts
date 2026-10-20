@@ -70,11 +70,20 @@ export function filePatch(file: PullFile): string {
   return truncate(file, fileHeader(file) + body);
 }
 
+const SUBMODULE =
+  /^-Subproject commit ([0-9a-f]{7})[0-9a-f]*\n\+Subproject commit ([0-9a-f]{7})/m;
+
+function fileSummary(file: PullFile): string {
+  const moved = file.patch?.match(SUBMODULE);
+  if (moved) return `submodule ${moved[1]} → ${moved[2]}`;
+  return `+${file.additions} -${file.deletions}`;
+}
+
 export function fileList(files: PullFile[]): string[] {
   const listed: string[] = [];
   let size = 0;
   for (const file of files) {
-    const line = `${STATUS[file.status] ?? "M"} ${file.filename} (+${file.additions} -${file.deletions})`;
+    const line = `${STATUS[file.status] ?? "M"} ${file.filename} (${fileSummary(file)})`;
     size += line.length + 4;
     if (size > FILE_LIST_LIMIT) {
       listed.push(`... and ${files.length - listed.length} more changed files`);

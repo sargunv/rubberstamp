@@ -1,0 +1,54 @@
+on:
+  github:
+    push:
+      if: ${{ event.git.branch == 'main' }}
+      init:
+        commit-sha: ${{ event.git.sha }}
+  cli:
+    init:
+      commit-sha: ${{ event.git.sha }}
+
+base:
+  image: ubuntu:24.04
+  config: rwx/base 1.2.0
+
+tasks:
+  - key: code
+    call: git/clone 2.2.0
+    with:
+      repository: https://github.com/sargunv/docket.git
+      ref: ${{ init.commit-sha }}
+      github-token: ${{ github.token }}
+      # hk lists the repository's files through git.
+      preserve-git-dir: true
+
+  - key: mise-cli
+    call: mise/install 1.1.1
+    with:
+      mise-version: 2026.10.15
+      install: "false"
+
+  - key: tools
+    use: [code, mise-cli]
+    filter: [.miserc.toml, mise.toml, mise.lock]
+    run: |
+      mise trust --quiet
+      mise install
+
+  - key: deps
+    use: tools
+    filter:
+      - .miserc.toml
+      - mise.toml
+      - mise.lock
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - apps/*/package.json
+      - packages/*/package.json
+    run: mise exec -- pnpm install --frozen-lockfile
+
+  - key: verify
+    use: [code, deps]
+    timeout: 15m
+    run: mise run verify
