@@ -57,11 +57,11 @@ describe("appJwt", async () => {
   const pkcs8 = pem("PRIVATE KEY", der);
 
   it("signs an RS256 token for the app", async () => {
-    const token = await appJwt("123", pkcs8, 1_700_000_000_000);
+    const token = await appJwt("Iv23test", pkcs8, 1_700_000_000_000);
     const [header = "", payload = "", signature = ""] = token.split(".");
     expect(
       JSON.parse(new TextDecoder().decode(fromBase64url(payload))),
-    ).toEqual({ iat: 1_699_999_940, exp: 1_700_000_540, iss: "123" });
+    ).toEqual({ iat: 1_699_999_940, exp: 1_700_000_540, iss: "Iv23test" });
     expect(
       await crypto.subtle.verify(
         "RSASSA-PKCS1-v1_5",
@@ -75,6 +75,6 @@ describe("appJwt", async () => {
   it("explains how to convert a PKCS#1 key", async () => {
     const pkcs1 =
       "-----BEGIN RSA PRIVATE KEY-----\nAAAA\n-----END RSA PRIVATE KEY-----\n";
-    await expect(appJwt("123", pkcs1)).rejects.toThrow(/openssl pkcs8/);
+    await expect(appJwt("Iv23test", pkcs1)).rejects.toThrow(/openssl pkcs8/);
   });
 });

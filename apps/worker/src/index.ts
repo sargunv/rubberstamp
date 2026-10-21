@@ -55,7 +55,7 @@ export default {
   fetch: app.fetch,
 
   async queue(batch, env) {
-    const github = new GitHubApp(env.GITHUB_APP_ID, env.GITHUB_PRIVATE_KEY);
+    const github = new GitHubApp(env.GITHUB_CLIENT_ID, env.GITHUB_PRIVATE_KEY);
     const store = new CloudflareStore(env.DB, env.STATES);
     const jev = (request: Request) =>
       ask(request, { apiKey: env.TYPESAFE_API_KEY });

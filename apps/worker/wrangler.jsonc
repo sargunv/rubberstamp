@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   "vars": {
-    "GITHUB_APP_ID": "",
+    "GITHUB_CLIENT_ID": "Iv23li79Tp7Nqf6OsCCb",
     "JEV_MODEL": "jev-latest",
     "DAILY_TOKENS": "5000000",
     "PRIVATE_ALLOWLIST": "sargunv"

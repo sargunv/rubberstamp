@@ -73,7 +73,7 @@ export class GitHubApp {
   private readonly send: typeof fetch;
 
   constructor(
-    private readonly appId: string,
+    private readonly clientId: string,
     private readonly privateKey: string,
     send: typeof fetch = (input, init) => fetch(input, init),
   ) {
@@ -102,7 +102,7 @@ export class GitHubApp {
   async installationToken(installationId: number): Promise<string> {
     const cached = this.tokens.get(installationId);
     if (cached && cached.expires > Date.now() + 5 * 60_000) return cached.token;
-    const send = this.request(() => appJwt(this.appId, this.privateKey));
+    const send = this.request(() => appJwt(this.clientId, this.privateKey));
     const path = `/app/installations/${installationId}/access_tokens`;
     const response = await send("POST", path);
     if (!response.ok) {

@@ -38,7 +38,7 @@ function importKey(pem: string): Promise<CryptoKey> {
 
 /** A JWT that authenticates as the GitHub App itself, valid for ten minutes. */
 export async function appJwt(
-  appId: string,
+  clientId: string,
   privateKey: string,
   now = Date.now(),
 ): Promise<string> {
@@ -47,7 +47,7 @@ export async function appJwt(
   // Backdated to tolerate clock drift, as GitHub recommends.
   const payload = base64url(
     encoder.encode(
-      JSON.stringify({ iat: seconds - 60, exp: seconds + 540, iss: appId }),
+      JSON.stringify({ iat: seconds - 60, exp: seconds + 540, iss: clientId }),
     ),
   );
   const signature = await crypto.subtle.sign(
