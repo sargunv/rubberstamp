@@ -1,20 +1,21 @@
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
-import { ConfigView } from "../../../components/config-view.tsx";
-import { useReadyRepo } from "./-shared.ts";
+import { ActivityTab } from "../../../components/activity-tab.tsx";
+import { activityQuery, repoQuery } from "../../../queries.ts";
+import { repoName, useReadyRepo } from "./-shared.ts";
 
 export const Route = createFileRoute("/$owner/$repo/")({
-  component: function Config() {
-    const { repo, status, colors } = useReadyRepo();
-    return (
-      <ConfigView
-        repo={repo}
-        path={status.config.path}
-        source={status.config.source}
-        groups={status.config.groups}
-        colors={colors}
-        warnings={status.config.warnings}
-      />
-    );
+  loader: async ({ context: { queryClient }, params }) => {
+    const name = repoName(params);
+    const status = await queryClient.ensureQueryData(repoQuery(name));
+    if (status?.status === "ready") {
+      await queryClient.ensureQueryData(activityQuery(name));
+    }
+  },
+  component: function Activity() {
+    const { repo, colors } = useReadyRepo();
+    const { data } = useSuspenseQuery(activityQuery(repo));
+    return <ActivityTab repo={repo} items={data.items} colors={colors} />;
   },
 });

@@ -3,9 +3,8 @@ import {
   type Account,
   previewGroups,
   resolveLabels,
-  type Log,
+  type Activity,
   type Me,
-  type Plans,
   type PreviewState,
   type RepoList,
   type RepoStatus,
@@ -141,6 +140,8 @@ type Access =
   | {
       ok: true;
       repo: string;
+      /** GitHub's ID for the repository, which survives renames. */
+      repoId: number;
       installation: { id: number; account: string };
     };
 
@@ -168,7 +169,7 @@ async function access(c: Context<Env_>): Promise<Access> {
       status: { status: "not installed", installUrl: installUrl(c.env) },
     };
   }
-  return { ok: true, repo: repo.full_name, installation };
+  return { ok: true, repo: repo.full_name, repoId: repo.id, installation };
 }
 
 /** An account's monthly allowance, in the unit usage is recorded in. */
@@ -230,17 +231,10 @@ api.get("/repos/:owner/:repo", async (c) => {
   return c.json(status);
 });
 
-api.get("/repos/:owner/:repo/log", (c) =>
-  withRepo(c, async ({ repo }) => {
-    const entries = await services(c.env).store.recentRuns(repo, 50);
-    return c.json({ entries } satisfies Log);
-  }),
-);
-
-api.get("/repos/:owner/:repo/plans", (c) =>
-  withRepo(c, async ({ repo }) => {
-    const plans = await services(c.env).store.recentPlans(repo, 50);
-    return c.json({ plans } satisfies Plans);
+api.get("/repos/:owner/:repo/activity", (c) =>
+  withRepo(c, async ({ repoId }) => {
+    const items = await services(c.env).store.recentActivity(repoId, 50);
+    return c.json({ items } satisfies Activity);
   }),
 );
 

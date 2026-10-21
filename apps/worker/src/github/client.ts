@@ -32,6 +32,7 @@ export type UserInstallation = {
 };
 
 const UserRepo = v.object({
+  id: v.number(),
   full_name: v.string(),
   private: v.boolean(),
   archived: v.optional(v.boolean(), false),

@@ -91,8 +91,8 @@ function Privacy() {
             signing out deletes it.
           </li>
           <li>
-            Anyone who can write to a repository can see its log and previews in
-            the dashboard.
+            Anyone who can write to a repository can see its activity and
+            previews in the dashboard.
           </li>
         </ul>
 

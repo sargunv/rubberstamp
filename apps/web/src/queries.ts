@@ -13,9 +13,8 @@ import * as v from "valibot";
 
 import {
   getAccount,
-  getLog,
+  getActivity,
   getMe,
-  getPlans,
   getPreview,
   getRepo,
   getRepos,
@@ -47,16 +46,10 @@ export const repoQuery = (repo: string) =>
     queryFn: () => getRepo(repo),
   });
 
-export const logQuery = (repo: string) =>
+export const activityQuery = (repo: string) =>
   queryOptions({
-    queryKey: ["repo", repo, "log"],
-    queryFn: () => getLog(repo),
-  });
-
-export const plansQuery = (repo: string) =>
-  queryOptions({
-    queryKey: ["repo", repo, "plans"],
-    queryFn: () => getPlans(repo),
+    queryKey: ["repo", repo, "activity"],
+    queryFn: () => getActivity(repo),
   });
 
 export const previewQuery = (repo: string) =>

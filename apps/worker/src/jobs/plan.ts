@@ -76,6 +76,9 @@ export async function runPlanJob(
   if (!(await current())) return { status: "skipped", reason: "superseded" };
 
   const judged = await judge(job, deps, pull, files, units, parsed.config);
+  // Judging can take a while, and a plan for a head the pull request has left
+  // would show as its latest.
+  if (!(await current())) return { status: "skipped", reason: "superseded" };
   await store.savePlan({
     installationId: job.installationId,
     repoId: job.repoId,

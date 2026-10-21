@@ -170,7 +170,7 @@ export function AccountPage({ account }: { account: Account }) {
                   meta={
                     <>
                       <AppLink
-                        to="/$owner/$repo/log"
+                        to="/$owner/$repo"
                         params={{ owner, repo: name }}
                         variant="name"
                         className="text-ink"
