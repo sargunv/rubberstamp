@@ -24,7 +24,7 @@ docs/design.md  the product design and the decisions behind it
   Queues. Put secrets in `apps/worker/.dev.vars` (gitignored).
 - `mise run deploy`: create missing queues, migrate D1, and deploy the Worker
   with its secrets from fnox. Wrangler creates the D1 database and R2 bucket
-  itself and writes the database ID into `wrangler.jsonc`; commit it.
+  itself and finds them by name afterward.
 - `mise run worker:types`: regenerate binding types after editing
   `apps/worker/wrangler.jsonc`.
 

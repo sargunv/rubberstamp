@@ -62,5 +62,9 @@ fnox export --format json |
 deploy() { pnpm exec wrangler deploy --secrets-file "$secrets"; }
 migrate() { pnpm exec wrangler d1 migrations apply rubberstamp --remote; }
 # The first deploy creates the D1 database, so only then does migrating follow it.
-if grep -q '"database_id"' wrangler.jsonc; then migrate && deploy; else deploy && migrate; fi
+if pnpm exec wrangler d1 info rubberstamp > /dev/null 2>&1; then
+  migrate && deploy
+else
+  deploy && migrate
+fi
 '''
