@@ -75,7 +75,15 @@ const Pull = v.object({
   body: v.nullable(v.string()),
   state: v.string(),
   head: v.object({ sha: v.string() }),
-  base: v.object({ ref: v.string(), sha: v.string() }),
+  base: v.object({
+    ref: v.string(),
+    sha: v.string(),
+    repo: v.object({
+      id: v.number(),
+      full_name: v.string(),
+      private: v.boolean(),
+    }),
+  }),
   changed_files: v.number(),
 });
 
@@ -204,6 +212,21 @@ export class GitHubApp {
     }
     const installation = v.parse(Installation, await response.json());
     return { id: installation.id, account: installation.account.login };
+  }
+
+  /**
+   * Whether a caller's token, such as a workflow's, can read a repository.
+   * Asking by id keeps a renamed or recreated name from answering instead.
+   */
+  async canRead(token: string, repoId: number): Promise<boolean> {
+    const send = this.request(async () => token);
+    const path = `/repositories/${repoId}`;
+    const response = await send("GET", path);
+    if ([401, 403, 404].includes(response.status)) return false;
+    if (!response.ok) {
+      throw new GitHubError(response.status, path, await response.text());
+    }
+    return true;
   }
 
   /** Calls made as a signed-in user, with their user access token. */

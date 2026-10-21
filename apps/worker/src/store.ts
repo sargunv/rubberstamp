@@ -1,11 +1,11 @@
 import {
   LogEntry,
   PlanEntry,
+  UnitDecision,
   type ActivityEntry,
   type ActivityItem,
   type LabelDecision,
   type PreviewGroup,
-  type UnitDecision,
 } from "@sargunv/rubberstamp-core";
 import * as v from "valibot";
 
@@ -164,6 +164,13 @@ export interface Store {
     head: string,
     baseRef: string,
   ): Promise<boolean>;
+  /** A plan's decisions, or null if that head and base have none yet. */
+  findPlan(
+    repoId: number,
+    number: number,
+    head: string,
+    baseRef: string,
+  ): Promise<UnitDecision[] | null>;
   savePlan(plan: CiPlan): Promise<void>;
   saveInstallation(
     id: number,
@@ -327,6 +334,23 @@ export class CloudflareStore implements Store {
       .bind(repoId, number, head, baseRef)
       .first();
     return row !== null;
+  }
+
+  async findPlan(
+    repoId: number,
+    number: number,
+    head: string,
+    baseRef: string,
+  ): Promise<UnitDecision[] | null> {
+    const decisions = await this.db
+      .prepare(
+        "SELECT decisions FROM ci_plans WHERE repo_id = ? AND number = ? AND head_sha = ? AND base_ref = ?",
+      )
+      .bind(repoId, number, head, baseRef)
+      .first<string>("decisions");
+    return decisions === null
+      ? null
+      : v.parse(v.array(UnitDecision), JSON.parse(decisions));
   }
 
   async savePlan(plan: CiPlan) {

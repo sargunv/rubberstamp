@@ -223,12 +223,11 @@ describe("runPlanJob", () => {
 
   it("plans every unit when the change is too large or Jev fails", async () => {
     const large = new FakeRepo(CONFIG, pull);
+    const { pull: real } = large;
     large.pull = async () => ({
+      ...(await real()),
       title: "Huge",
       body: null,
-      state: "open",
-      head: { sha: "abc123" },
-      base: { ref: "main", sha: "base123" },
       changed_files: 4000,
     });
     const store = new FakeStore();

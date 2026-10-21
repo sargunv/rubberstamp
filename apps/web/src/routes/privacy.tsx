@@ -96,6 +96,25 @@ function Privacy() {
           </li>
         </ul>
 
+        <h2>CI plans for workflows</h2>
+        <ul>
+          <li>
+            Workflows ask Rubberstamp for a pull request's CI plan so they can
+            skip what it doesn't need. Asking can make Rubberstamp plan a pull
+            request it hasn't yet, just as a push would.
+          </li>
+          <li>
+            For a public repository, anyone can ask for a pull request's plan:
+            its unit names, which run or skip, their scores, and the rules that
+            decided them.
+          </li>
+          <li>
+            For a private repository, asking takes a token that can read the
+            repository, such as the workflow's own. Rubberstamp checks the token
+            with GitHub and doesn't keep it.
+          </li>
+        </ul>
+
         <h2>Where it runs</h2>
         <p>
           Rubberstamp runs on Cloudflare, which stores its data and keeps its

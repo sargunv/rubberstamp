@@ -62,6 +62,8 @@ export class FakeRepo implements RepoApi {
   /** The pull request's head and files, which a test may change. */
   head = "abc123";
   base = "main";
+  repoId = 2;
+  private = false;
   files: PullFile[] = [
     {
       filename: "src/map.cpp",
@@ -76,7 +78,15 @@ export class FakeRepo implements RepoApi {
     body: this.item.body,
     state: this.item.state,
     head: { sha: this.head },
-    base: { ref: this.base, sha: "base123" },
+    base: {
+      ref: this.base,
+      sha: "base123",
+      repo: {
+        id: this.repoId,
+        full_name: this.fullName,
+        private: this.private,
+      },
+    },
     changed_files: this.files.length,
   });
   pullFiles = async () => this.files;
@@ -123,6 +133,19 @@ export class FakeStore implements Store {
   plans: CiPlan[] = [];
   hasPlan = async (_: number, __: number, head: string, baseRef: string) =>
     this.plans.some((plan) => plan.head === head && plan.baseRef === baseRef);
+  findPlan = async (
+    repoId: number,
+    number: number,
+    head: string,
+    baseRef: string,
+  ) =>
+    this.plans.find(
+      (plan) =>
+        plan.repoId === repoId &&
+        plan.number === number &&
+        plan.head === head &&
+        plan.baseRef === baseRef,
+    )?.decisions ?? null;
   savePlan = async (plan: CiPlan) => {
     this.plans.push(plan);
   };

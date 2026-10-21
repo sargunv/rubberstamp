@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { api, auth } from "./api.ts";
 import { budgetFor } from "./budget.ts";
+import { ciPlan, PlanQuery } from "./ci-plan.ts";
 import { verifyWebhook } from "./github/auth.ts";
 import { runLabelJob } from "./jobs/label.ts";
 import { runPlanJob } from "./jobs/plan.ts";
@@ -61,6 +62,29 @@ app.post("/webhooks/github", async (c) => {
     ...effects.forget.map((f) => store.forgetRuns(f.installationId, f.repoIds)),
   ]);
   return c.body(null, 204);
+});
+
+// Public, so fork pull requests without secrets can ask; ciPlan decides who
+// may see a private repository's plans.
+app.post("/ci/plan", async (c) => {
+  const query = v.safeParse(PlanQuery, await c.req.json().catch(() => null));
+  if (!query.success) {
+    return c.json({ error: "Send repository, pull_request, and sha" }, 400);
+  }
+  const bearer = /^Bearer\s+(\S+)$/i.exec(c.req.header("Authorization") ?? "");
+  const { github, store, policy } = services(c.env);
+  const reply = await ciPlan(query.output, bearer?.[1] ?? null, {
+    installationFor: (name) => github.installationFor(name),
+    repo: (id, name) => github.repo(id, name),
+    canRead: (token, id) => github.canRead(token, id),
+    store,
+    enqueue: async (job) => {
+      await c.env.JOBS.send(job);
+    },
+    policy,
+    origin: c.env.APP_ORIGIN,
+  });
+  return c.json(reply.body, reply.code);
 });
 
 export default {
