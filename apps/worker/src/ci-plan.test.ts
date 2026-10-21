@@ -288,26 +288,29 @@ describe("ciPlan", () => {
       });
     };
 
-    it("from the plan it follows", async () => {
-      const { deps, repo, save, store } = setup();
-      ranOn(repo);
-      await save(HEAD, judged);
+    it.each([[".github/workflows/ci.yml"], [".github/workflows/ci.yml@main"]])(
+      "from the plan it follows, for a run of %s",
+      async (path) => {
+        const { deps, repo, save, store } = setup();
+        ranOn(repo, { path });
+        await save(HEAD, judged);
 
-      await ciPlan(query(run), null, deps);
-      expect([...store.ciRuns.values()]).toEqual([
-        {
-          installationId: 1,
-          repoId: 2,
-          runId: 9001,
-          attempt: 2,
-          number: 3,
-          head: HEAD,
-          base: "base123",
-          units: ["linux"],
-          workflow: ".github/workflows/ci.yml",
-        },
-      ]);
-    });
+        await ciPlan(query(run), null, deps);
+        expect([...store.ciRuns.values()]).toEqual([
+          {
+            installationId: 1,
+            repoId: 2,
+            runId: 9001,
+            attempt: 2,
+            number: 3,
+            head: HEAD,
+            base: "base123",
+            units: ["linux"],
+            workflow: ".github/workflows/ci.yml",
+          },
+        ]);
+      },
+    );
 
     it("as every configured unit when every unit runs", async () => {
       const { deps, repo, save, store } = setup();
@@ -386,6 +389,11 @@ describe("ciPlan", () => {
       ["for another event", { event: "pull_request_target" }],
       ["in another repository", { repository: { id: 99 } }],
       ["of another workflow", { path: ".github/workflows/lint.yml" }],
+      [
+        "of another workflow at a ref",
+        { path: ".github/workflows/lint.yml@main" },
+      ],
+      ["of a workflow named like it", { path: ".github/workflows/ci.yml.bak" }],
       ["started over a day ago", { created_at: "2026-10-20T11:59:59Z" }],
     ])("but not for a run %s", async (_, overrides) => {
       const { deps, repo, save, store } = setup();
