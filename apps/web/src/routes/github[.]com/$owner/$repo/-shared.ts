@@ -4,7 +4,7 @@ import { getRouteApi } from "@tanstack/react-router";
 
 import { repoQuery } from "../../../../queries.ts";
 
-const route = getRouteApi("/github/$owner/$repo");
+const route = getRouteApi("/github.com/$owner/$repo");
 
 export function repoName(params: { owner: string; repo: string }): string {
   return `${params.owner}/${params.repo}`;

@@ -57,7 +57,7 @@ function Breadcrumb({
       {repo ? (
         <>
           <AppLink
-            to="/github/$owner"
+            to="/github.com/$owner"
             params={{ owner }}
             variant="quiet"
             className="px-1 py-1"
@@ -121,7 +121,7 @@ function RepoSwitcher({ repo }: { repo: string }) {
         if (!next || next === repo) return;
         const [owner = "", name = ""] = next.split("/");
         void navigate({
-          to: "/github/$owner/$repo",
+          to: "/github.com/$owner/$repo",
           params: { owner, repo: name },
         });
       }}

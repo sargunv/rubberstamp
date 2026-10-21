@@ -27,7 +27,7 @@ ci:
 
 const HEAD = "a".repeat(40);
 const OLD = "b".repeat(40);
-const URL = "https://rubberstamp.example/github/o/r";
+const URL = "https://rubberstamp.example/github.com/o/r";
 const NOW = new Date("2026-10-21T12:00:00Z");
 
 const pull: Issue = {
