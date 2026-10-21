@@ -166,7 +166,7 @@ export async function ciPlan(
     throw error;
   }
 
-  const url = `${deps.origin}/github/${repository.full_name}`;
+  const url = `${deps.origin}/github.com/${repository.full_name}`;
   const everything = (reason: string): PlanReply => ({
     code: 200,
     body: { status: "ready", all: true, units: [], decisions: [], reason, url },

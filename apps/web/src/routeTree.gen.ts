@@ -12,12 +12,12 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as TermsRouteImport } from './routes/terms'
-import { Route as GithubIndexRouteImport } from './routes/github/index'
-import { Route as GithubOwnerIndexRouteImport } from './routes/github/$owner/index'
-import { Route as GithubOwnerRepoRouteRouteImport } from './routes/github/$owner/$repo/route'
-import { Route as GithubOwnerRepoIndexRouteImport } from './routes/github/$owner/$repo/index'
-import { Route as GithubOwnerRepoCiRouteImport } from './routes/github/$owner/$repo/ci'
-import { Route as GithubOwnerRepoLabelsRouteImport } from './routes/github/$owner/$repo/labels'
+import { Route as GithubDotcomIndexRouteImport } from './routes/github[.]com/index'
+import { Route as GithubDotcomOwnerIndexRouteImport } from './routes/github[.]com/$owner/index'
+import { Route as GithubDotcomOwnerRepoRouteRouteImport } from './routes/github[.]com/$owner/$repo/route'
+import { Route as GithubDotcomOwnerRepoIndexRouteImport } from './routes/github[.]com/$owner/$repo/index'
+import { Route as GithubChar91DotChar93comOwnerRepoChar91Char93CiRouteImport } from './routes/github[.]com/$owner/$repo/[-]/ci'
+import { Route as GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRouteImport } from './routes/github[.]com/$owner/$repo/[-]/labels'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -34,69 +34,73 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GithubIndexRoute = GithubIndexRouteImport.update({
-  id: '/github/',
-  path: '/github/',
+const GithubDotcomIndexRoute = GithubDotcomIndexRouteImport.update({
+  id: '/github.com/',
+  path: '/github.com/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GithubOwnerIndexRoute = GithubOwnerIndexRouteImport.update({
-  id: '/github/$owner/',
-  path: '/github/$owner/',
+const GithubDotcomOwnerIndexRoute = GithubDotcomOwnerIndexRouteImport.update({
+  id: '/github.com/$owner/',
+  path: '/github.com/$owner/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const GithubOwnerRepoRouteRoute = GithubOwnerRepoRouteRouteImport.update({
-  id: '/github/$owner/$repo',
-  path: '/github/$owner/$repo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const GithubOwnerRepoIndexRoute = GithubOwnerRepoIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => GithubOwnerRepoRouteRoute,
-} as any)
-const GithubOwnerRepoCiRoute = GithubOwnerRepoCiRouteImport.update({
-  id: '/ci',
-  path: '/ci',
-  getParentRoute: () => GithubOwnerRepoRouteRoute,
-} as any)
-const GithubOwnerRepoLabelsRoute = GithubOwnerRepoLabelsRouteImport.update({
-  id: '/labels',
-  path: '/labels',
-  getParentRoute: () => GithubOwnerRepoRouteRoute,
-} as any)
+const GithubDotcomOwnerRepoRouteRoute =
+  GithubDotcomOwnerRepoRouteRouteImport.update({
+    id: '/github.com/$owner/$repo',
+    path: '/github.com/$owner/$repo',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const GithubDotcomOwnerRepoIndexRoute =
+  GithubDotcomOwnerRepoIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => GithubDotcomOwnerRepoRouteRoute,
+  } as any)
+const GithubChar91DotChar93comOwnerRepoChar91Char93CiRoute =
+  GithubChar91DotChar93comOwnerRepoChar91Char93CiRouteImport.update({
+    id: '/-/ci',
+    path: '/-/ci',
+    getParentRoute: () => GithubDotcomOwnerRepoRouteRoute,
+  } as any)
+const GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRoute =
+  GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRouteImport.update({
+    id: '/-/labels',
+    path: '/-/labels',
+    getParentRoute: () => GithubDotcomOwnerRepoRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
-  '/github/': typeof GithubIndexRoute
-  '/github/$owner/$repo': typeof GithubOwnerRepoRouteRouteWithChildren
-  '/github/$owner/': typeof GithubOwnerIndexRoute
-  '/github/$owner/$repo/ci': typeof GithubOwnerRepoCiRoute
-  '/github/$owner/$repo/labels': typeof GithubOwnerRepoLabelsRoute
-  '/github/$owner/$repo/': typeof GithubOwnerRepoIndexRoute
+  '/github.com/': typeof GithubDotcomIndexRoute
+  '/github.com/$owner/$repo': typeof GithubDotcomOwnerRepoRouteRouteWithChildren
+  '/github.com/$owner/': typeof GithubDotcomOwnerIndexRoute
+  '/github.com/$owner/$repo/': typeof GithubDotcomOwnerRepoIndexRoute
+  '/github.com/$owner/$repo/-/ci': typeof GithubChar91DotChar93comOwnerRepoChar91Char93CiRoute
+  '/github.com/$owner/$repo/-/labels': typeof GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
-  '/github': typeof GithubIndexRoute
-  '/github/$owner': typeof GithubOwnerIndexRoute
-  '/github/$owner/$repo/ci': typeof GithubOwnerRepoCiRoute
-  '/github/$owner/$repo/labels': typeof GithubOwnerRepoLabelsRoute
-  '/github/$owner/$repo': typeof GithubOwnerRepoIndexRoute
+  '/github.com': typeof GithubDotcomIndexRoute
+  '/github.com/$owner': typeof GithubDotcomOwnerIndexRoute
+  '/github.com/$owner/$repo': typeof GithubDotcomOwnerRepoIndexRoute
+  '/github.com/$owner/$repo/-/ci': typeof GithubChar91DotChar93comOwnerRepoChar91Char93CiRoute
+  '/github.com/$owner/$repo/-/labels': typeof GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
-  '/github/': typeof GithubIndexRoute
-  '/github/$owner/$repo': typeof GithubOwnerRepoRouteRouteWithChildren
-  '/github/$owner/': typeof GithubOwnerIndexRoute
-  '/github/$owner/$repo/ci': typeof GithubOwnerRepoCiRoute
-  '/github/$owner/$repo/labels': typeof GithubOwnerRepoLabelsRoute
-  '/github/$owner/$repo/': typeof GithubOwnerRepoIndexRoute
+  '/github.com/': typeof GithubDotcomIndexRoute
+  '/github.com/$owner/$repo': typeof GithubDotcomOwnerRepoRouteRouteWithChildren
+  '/github.com/$owner/': typeof GithubDotcomOwnerIndexRoute
+  '/github.com/$owner/$repo/': typeof GithubDotcomOwnerRepoIndexRoute
+  '/github.com/$owner/$repo/-/ci': typeof GithubChar91DotChar93comOwnerRepoChar91Char93CiRoute
+  '/github.com/$owner/$repo/-/labels': typeof GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -104,42 +108,42 @@ export interface FileRouteTypes {
     | '/'
     | '/privacy'
     | '/terms'
-    | '/github/'
-    | '/github/$owner/$repo'
-    | '/github/$owner/'
-    | '/github/$owner/$repo/ci'
-    | '/github/$owner/$repo/labels'
-    | '/github/$owner/$repo/'
+    | '/github.com/'
+    | '/github.com/$owner/$repo'
+    | '/github.com/$owner/'
+    | '/github.com/$owner/$repo/'
+    | '/github.com/$owner/$repo/-/ci'
+    | '/github.com/$owner/$repo/-/labels'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/privacy'
     | '/terms'
-    | '/github'
-    | '/github/$owner'
-    | '/github/$owner/$repo/ci'
-    | '/github/$owner/$repo/labels'
-    | '/github/$owner/$repo'
+    | '/github.com'
+    | '/github.com/$owner'
+    | '/github.com/$owner/$repo'
+    | '/github.com/$owner/$repo/-/ci'
+    | '/github.com/$owner/$repo/-/labels'
   id:
     | '__root__'
     | '/'
     | '/privacy'
     | '/terms'
-    | '/github/'
-    | '/github/$owner/$repo'
-    | '/github/$owner/'
-    | '/github/$owner/$repo/ci'
-    | '/github/$owner/$repo/labels'
-    | '/github/$owner/$repo/'
+    | '/github.com/'
+    | '/github.com/$owner/$repo'
+    | '/github.com/$owner/'
+    | '/github.com/$owner/$repo/'
+    | '/github.com/$owner/$repo/-/ci'
+    | '/github.com/$owner/$repo/-/labels'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
-  GithubIndexRoute: typeof GithubIndexRoute
-  GithubOwnerRepoRouteRoute: typeof GithubOwnerRepoRouteRouteWithChildren
-  GithubOwnerIndexRoute: typeof GithubOwnerIndexRoute
+  GithubDotcomIndexRoute: typeof GithubDotcomIndexRoute
+  GithubDotcomOwnerRepoRouteRoute: typeof GithubDotcomOwnerRepoRouteRouteWithChildren
+  GithubDotcomOwnerIndexRoute: typeof GithubDotcomOwnerIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -165,73 +169,78 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/github/': {
-      id: '/github/'
-      path: '/github'
-      fullPath: '/github/'
-      preLoaderRoute: typeof GithubIndexRouteImport
+    '/github.com/': {
+      id: '/github.com/'
+      path: '/github.com'
+      fullPath: '/github.com/'
+      preLoaderRoute: typeof GithubDotcomIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/github/$owner/': {
-      id: '/github/$owner/'
-      path: '/github/$owner'
-      fullPath: '/github/$owner/'
-      preLoaderRoute: typeof GithubOwnerIndexRouteImport
+    '/github.com/$owner/': {
+      id: '/github.com/$owner/'
+      path: '/github.com/$owner'
+      fullPath: '/github.com/$owner/'
+      preLoaderRoute: typeof GithubDotcomOwnerIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/github/$owner/$repo': {
-      id: '/github/$owner/$repo'
-      path: '/github/$owner/$repo'
-      fullPath: '/github/$owner/$repo'
-      preLoaderRoute: typeof GithubOwnerRepoRouteRouteImport
+    '/github.com/$owner/$repo': {
+      id: '/github.com/$owner/$repo'
+      path: '/github.com/$owner/$repo'
+      fullPath: '/github.com/$owner/$repo'
+      preLoaderRoute: typeof GithubDotcomOwnerRepoRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/github/$owner/$repo/': {
-      id: '/github/$owner/$repo/'
+    '/github.com/$owner/$repo/': {
+      id: '/github.com/$owner/$repo/'
       path: '/'
-      fullPath: '/github/$owner/$repo/'
-      preLoaderRoute: typeof GithubOwnerRepoIndexRouteImport
-      parentRoute: typeof GithubOwnerRepoRouteRoute
+      fullPath: '/github.com/$owner/$repo/'
+      preLoaderRoute: typeof GithubDotcomOwnerRepoIndexRouteImport
+      parentRoute: typeof GithubDotcomOwnerRepoRouteRoute
     }
-    '/github/$owner/$repo/ci': {
-      id: '/github/$owner/$repo/ci'
-      path: '/ci'
-      fullPath: '/github/$owner/$repo/ci'
-      preLoaderRoute: typeof GithubOwnerRepoCiRouteImport
-      parentRoute: typeof GithubOwnerRepoRouteRoute
+    '/github.com/$owner/$repo/-/ci': {
+      id: '/github.com/$owner/$repo/-/ci'
+      path: '/-/ci'
+      fullPath: '/github.com/$owner/$repo/-/ci'
+      preLoaderRoute: typeof GithubChar91DotChar93comOwnerRepoChar91Char93CiRouteImport
+      parentRoute: typeof GithubDotcomOwnerRepoRouteRoute
     }
-    '/github/$owner/$repo/labels': {
-      id: '/github/$owner/$repo/labels'
-      path: '/labels'
-      fullPath: '/github/$owner/$repo/labels'
-      preLoaderRoute: typeof GithubOwnerRepoLabelsRouteImport
-      parentRoute: typeof GithubOwnerRepoRouteRoute
+    '/github.com/$owner/$repo/-/labels': {
+      id: '/github.com/$owner/$repo/-/labels'
+      path: '/-/labels'
+      fullPath: '/github.com/$owner/$repo/-/labels'
+      preLoaderRoute: typeof GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRouteImport
+      parentRoute: typeof GithubDotcomOwnerRepoRouteRoute
     }
   }
 }
 
-interface GithubOwnerRepoRouteRouteChildren {
-  GithubOwnerRepoCiRoute: typeof GithubOwnerRepoCiRoute
-  GithubOwnerRepoLabelsRoute: typeof GithubOwnerRepoLabelsRoute
-  GithubOwnerRepoIndexRoute: typeof GithubOwnerRepoIndexRoute
+interface GithubDotcomOwnerRepoRouteRouteChildren {
+  GithubDotcomOwnerRepoIndexRoute: typeof GithubDotcomOwnerRepoIndexRoute
+  GithubChar91DotChar93comOwnerRepoChar91Char93CiRoute: typeof GithubChar91DotChar93comOwnerRepoChar91Char93CiRoute
+  GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRoute: typeof GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRoute
 }
 
-const GithubOwnerRepoRouteRouteChildren: GithubOwnerRepoRouteRouteChildren = {
-  GithubOwnerRepoCiRoute: GithubOwnerRepoCiRoute,
-  GithubOwnerRepoLabelsRoute: GithubOwnerRepoLabelsRoute,
-  GithubOwnerRepoIndexRoute: GithubOwnerRepoIndexRoute,
-}
+const GithubDotcomOwnerRepoRouteRouteChildren: GithubDotcomOwnerRepoRouteRouteChildren =
+  {
+    GithubDotcomOwnerRepoIndexRoute: GithubDotcomOwnerRepoIndexRoute,
+    GithubChar91DotChar93comOwnerRepoChar91Char93CiRoute:
+      GithubChar91DotChar93comOwnerRepoChar91Char93CiRoute,
+    GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRoute:
+      GithubChar91DotChar93comOwnerRepoChar91Char93LabelsRoute,
+  }
 
-const GithubOwnerRepoRouteRouteWithChildren =
-  GithubOwnerRepoRouteRoute._addFileChildren(GithubOwnerRepoRouteRouteChildren)
+const GithubDotcomOwnerRepoRouteRouteWithChildren =
+  GithubDotcomOwnerRepoRouteRoute._addFileChildren(
+    GithubDotcomOwnerRepoRouteRouteChildren,
+  )
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
-  GithubIndexRoute: GithubIndexRoute,
-  GithubOwnerRepoRouteRoute: GithubOwnerRepoRouteRouteWithChildren,
-  GithubOwnerIndexRoute: GithubOwnerIndexRoute,
+  GithubDotcomIndexRoute: GithubDotcomIndexRoute,
+  GithubDotcomOwnerRepoRouteRoute: GithubDotcomOwnerRepoRouteRouteWithChildren,
+  GithubDotcomOwnerIndexRoute: GithubDotcomOwnerIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

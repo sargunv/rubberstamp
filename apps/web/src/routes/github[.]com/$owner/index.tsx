@@ -8,7 +8,7 @@ import {
 } from "../../../components/account.tsx";
 import { accountQuery } from "../../../queries.ts";
 
-export const Route = createFileRoute("/github/$owner/")({
+export const Route = createFileRoute("/github.com/$owner/")({
   beforeLoad: ({ context }) => {
     if (!context.me) throw redirect({ to: "/" });
   },

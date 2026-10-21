@@ -6,7 +6,7 @@ import { repoQuery } from "../../../../queries.ts";
 import { PendingBar } from "../../../../ui/progress.tsx";
 import { repoName } from "./-shared.ts";
 
-export const Route = createFileRoute("/github/$owner/$repo")({
+export const Route = createFileRoute("/github.com/$owner/$repo")({
   beforeLoad: ({ context }) => {
     if (!context.me) throw redirect({ to: "/" });
   },

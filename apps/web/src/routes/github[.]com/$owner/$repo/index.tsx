@@ -5,7 +5,7 @@ import { ActivityTab } from "../../../../components/activity-tab.tsx";
 import { activityQuery, repoQuery } from "../../../../queries.ts";
 import { repoName, useReadyRepo } from "./-shared.ts";
 
-export const Route = createFileRoute("/github/$owner/$repo/")({
+export const Route = createFileRoute("/github.com/$owner/$repo/")({
   loader: async ({ context: { queryClient }, params }) => {
     const name = repoName(params);
     const status = await queryClient.ensureQueryData(repoQuery(name));
