@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { parseAllowlist } from "./allowlist.ts";
 import { webhookEffects } from "./webhooks.ts";
 
-const policy = { privateAllowlist: new Set(["sargunv"]) };
+const policy = { privateAllowlist: parseAllowlist("sargunv/*") };
 
 function payload(overrides: { private?: boolean; owner?: string } = {}) {
   return {
@@ -12,7 +13,6 @@ function payload(overrides: { private?: boolean; owner?: string } = {}) {
       id: 42,
       full_name: `${overrides.owner ?? "maplibre"}/maplibre-native-ffi`,
       private: overrides.private ?? false,
-      owner: { login: overrides.owner ?? "maplibre" },
     },
     sender: { login: "someone", type: "User" },
     pull_request: { number: 12, updated_at: "2026-10-20T00:00:00Z" },

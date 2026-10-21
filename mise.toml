@@ -44,11 +44,23 @@ description = "Run the Worker locally against local D1, R2, and Queues."
 dir = "apps/worker"
 run = "pnpm exec wrangler d1 migrations apply rubberstamp --local && pnpm exec wrangler dev"
 
-[tasks."worker:secrets"]
-description = "Upload the Worker's secrets from fnox to Cloudflare."
+[tasks.deploy]
+description = "Create missing queues, migrate D1, and deploy the Worker with its secrets from fnox."
 dir = "apps/worker"
+shell = "bash -c"
 run = '''
-for name in GITHUB_PRIVATE_KEY GITHUB_WEBHOOK_SECRET TYPESAFE_API_KEY; do
-  fnox get "$name" | pnpm exec wrangler secret put "$name"
+set -euo pipefail
+for queue in rubberstamp-jobs rubberstamp-jobs-dlq; do
+  pnpm exec wrangler queues info "$queue" > /dev/null 2>&1 ||
+    pnpm exec wrangler queues create "$queue"
 done
+dir="$(mktemp -d)"
+trap 'rm -rf "$dir"' EXIT
+secrets="$dir/secrets.json"
+fnox export --format json |
+  node -e 'process.stdout.write(JSON.stringify(JSON.parse(require("node:fs").readFileSync(0, "utf8")).secrets))' > "$secrets"
+deploy() { pnpm exec wrangler deploy --secrets-file "$secrets"; }
+migrate() { pnpm exec wrangler d1 migrations apply rubberstamp --remote; }
+# The first deploy creates the D1 database, so only then does migrating follow it.
+if grep -q '"database_id"' wrangler.jsonc; then migrate && deploy; else deploy && migrate; fi
 '''

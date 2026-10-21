@@ -22,8 +22,9 @@ docs/design.md  the product design and the decisions behind it
 - `mise run fix`: apply formatters and auto-fixable lint.
 - `mise run worker:dev`: run the Worker locally against local D1, R2, and
   Queues. Put secrets in `apps/worker/.dev.vars` (gitignored).
-- `mise run worker:secrets`: upload the Worker's secrets from fnox to
-  Cloudflare.
+- `mise run deploy`: create missing queues, migrate D1, and deploy the Worker
+  with its secrets from fnox. Wrangler creates the D1 database and R2 bucket
+  itself and writes the database ID into `wrangler.jsonc`; commit it.
 - `mise run worker:types`: regenerate binding types after editing
   `apps/worker/wrangler.jsonc`.
 

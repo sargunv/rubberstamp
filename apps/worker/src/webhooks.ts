@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { allowlisted, type Allowlist } from "./allowlist.ts";
 import type { LabelJob } from "./jobs/label.ts";
 import type { LabelEvent } from "./store.ts";
 
@@ -7,7 +8,6 @@ const Repository = v.object({
   id: v.number(),
   full_name: v.string(),
   private: v.boolean(),
-  owner: v.object({ login: v.string() }),
 });
 
 const Sender = v.object({ login: v.string(), type: v.string() });
@@ -39,7 +39,8 @@ export type Effects = {
   installations: { id: number; account: string; deleted: boolean }[];
 };
 
-export type Policy = { privateAllowlist: ReadonlySet<string> };
+/** Public repositories are open to all; private ones need the allowlist. */
+export type Policy = { privateAllowlist: Allowlist };
 
 export function allowed(
   repository: v.InferOutput<typeof Repository>,
@@ -47,7 +48,7 @@ export function allowed(
 ): boolean {
   return (
     !repository.private ||
-    policy.privateAllowlist.has(repository.owner.login.toLowerCase())
+    allowlisted(policy.privateAllowlist, repository.full_name)
   );
 }
 

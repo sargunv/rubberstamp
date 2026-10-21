@@ -5,17 +5,17 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  "routes": [{ "pattern": "rubberstamp.sargunv.dev", "custom_domain": true }],
   "vars": {
     "GITHUB_CLIENT_ID": "Iv23li79Tp7Nqf6OsCCb",
     "JEV_MODEL": "jev-latest",
     "DAILY_TOKENS": "5000000",
-    "PRIVATE_ALLOWLIST": "sargunv"
+    "PRIVATE_ALLOWLIST": "sargunv/*,maplibre/*,stringline-app/*"
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "rubberstamp",
-      "database_id": "local",
       "migrations_dir": "migrations"
     }
   ],

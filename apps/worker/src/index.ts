@@ -2,6 +2,7 @@ import { ask, type Request } from "@sargunv/rubberstamp-core";
 import { Hono } from "hono";
 import * as v from "valibot";
 
+import { parseAllowlist } from "./allowlist.ts";
 import { verifyWebhook } from "./github/auth.ts";
 import { GitHubApp } from "./github/client.ts";
 import { runLabelJob } from "./jobs/label.ts";
@@ -17,13 +18,7 @@ const Job = v.object({
 });
 
 function policy(env: Env): Policy {
-  return {
-    privateAllowlist: new Set(
-      env.PRIVATE_ALLOWLIST.split(",")
-        .map((owner) => owner.trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  };
+  return { privateAllowlist: parseAllowlist(env.PRIVATE_ALLOWLIST) };
 }
 
 const app = new Hono<{ Bindings: Env }>();
