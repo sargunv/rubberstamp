@@ -55,10 +55,13 @@ sha=$(jq -er '.pull_request.head.sha | strings' "${GITHUB_EVENT_PATH:-}" 2> /dev
   everything "couldn't read the pull request from the event" warning
 
 # The run asking, so Rubberstamp can tell which units passed once it succeeds.
-# Without them the plan still works; only that record is lost.
+# Without them the plan still works; only that record is lost. A
+# pull_request_target run tests the base branch's code, not the head's, so
+# its success says nothing about the head.
 run_id="${GITHUB_RUN_ID:-}"
 run_attempt="${GITHUB_RUN_ATTEMPT:-}"
-if ! [[ "$run_id" =~ ^[1-9][0-9]*$ && "$run_attempt" =~ ^[1-9][0-9]*$ ]]; then
+if [[ "${GITHUB_EVENT_NAME:-}" != pull_request ]] ||
+  ! [[ "$run_id" =~ ^[1-9][0-9]*$ && "$run_attempt" =~ ^[1-9][0-9]*$ ]]; then
   run_id=""
 fi
 
