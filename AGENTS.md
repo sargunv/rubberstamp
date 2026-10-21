@@ -16,7 +16,7 @@ apps/worker     Cloudflare Worker: GitHub webhooks, queue consumer, jobs,
 apps/web        The dashboard: React, TanStack Router (file-based routes in
                 src/routes) and TanStack Query, Tailwind, and Base UI. Route
                 loaders only fill the Query cache; components read from it.
-README.md       what Rubberstamp does and the configuration reference
+README.md       a short introduction for people discovering the project
 ```
 
 ## Dev tool commands
