@@ -102,6 +102,7 @@ describe("webhookEffects", () => {
       jobs: [],
       installations: [{ id: 7, account: "maplibre", deleted: true }],
       forget: [{ installationId: 7 }],
+      succeeded: [],
     });
     expect(installation("suspend").forget).toEqual([]);
     expect(installation("unsuspend").installations[0]?.deleted).toBe(false);
@@ -109,10 +110,38 @@ describe("webhookEffects", () => {
       jobs: [],
       installations: [],
       forget: [],
+      succeeded: [],
     });
     expect(webhookEffects("issues", { nonsense: true }, policy).jobs).toEqual(
       [],
     );
+  });
+
+  it("passes on workflow runs that succeeded, and only those", () => {
+    const succeeded = (
+      conclusion: string | null,
+      overrides: { action?: string; private?: boolean } = {},
+    ) =>
+      webhookEffects(
+        "workflow_run",
+        {
+          ...payload({ action: "completed", ...overrides }),
+          workflow_run: {
+            id: 9001,
+            run_attempt: 2,
+            conclusion,
+            head_sha: "abc123",
+          },
+        },
+        policy,
+      ).succeeded;
+    expect(succeeded("success")).toEqual([
+      { repoId: 42, runId: 9001, attempt: 2, head: "abc123" },
+    ]);
+    expect(succeeded("failure")).toEqual([]);
+    expect(succeeded("cancelled")).toEqual([]);
+    expect(succeeded(null, { action: "in_progress" })).toEqual([]);
+    expect(succeeded("success", { private: true })).toEqual([]);
   });
 
   it("forgets repositories removed from an installation", () => {

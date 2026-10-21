@@ -30,6 +30,12 @@ export const PlanQuery = v.object({
   ),
   /** Queue a plan if none exists yet, as a webhook would have. */
   start: v.optional(v.boolean(), false),
+  /**
+   * The workflow run asking, so its outcome can say which units passed. Older
+   * versions of the action don't send it.
+   */
+  run_id: v.optional(v.pipe(v.number(), v.safeInteger(), v.minValue(1))),
+  run_attempt: v.optional(v.pipe(v.number(), v.safeInteger(), v.minValue(1))),
 });
 
 export type PlanQuery = v.InferOutput<typeof PlanQuery>;
@@ -62,12 +68,49 @@ export type PlanQueryDeps = {
   installationFor(fullName: string): Promise<{ id: number } | null>;
   repo(installationId: number, fullName: string): RepoApi;
   canRead(token: string, repoId: number): Promise<boolean>;
-  store: Pick<Store, "findPlan" | "claim" | "release">;
+  store: Pick<Store, "findPlan" | "claim" | "release" | "saveRun">;
   enqueue(job: PlanJob): Promise<void>;
   policy: Policy;
   /** Where the dashboard is served. */
   origin: string;
+  now?: () => Date;
 };
+
+/**
+ * How long after a run starts its units can still be recorded. A full re-run
+ * keeps the workflow file of its first attempt but would be judged under
+ * today's config, so an old run could credit units it never knew about.
+ */
+const MAX_RUN_AGE_MS = 24 * 60 * 60_000;
+
+/**
+ * Whether the run a caller names really is a pull_request run of this
+ * repository at the head it asked about, started recently. The endpoint is
+ * public, so a caller could otherwise tie another workflow's success, or one
+ * that ran the base branch's code, to this pull request's units.
+ */
+async function runAsked(
+  repo: RepoApi,
+  repoId: number,
+  runId: number,
+  query: PlanQuery,
+  now: Date,
+): Promise<boolean> {
+  try {
+    const run = await repo.workflowRun(runId);
+    return (
+      run !== null &&
+      run.repository.id === repoId &&
+      run.event === "pull_request" &&
+      run.head_sha.toLowerCase() === query.sha &&
+      now.getTime() - Date.parse(run.created_at) <= MAX_RUN_AGE_MS
+    );
+  } catch (error) {
+    // Recording only saves later CI time, so it never fails the plan.
+    console.error(`${query.repository} run ${runId}`, error);
+    return false;
+  }
+}
 
 const NOT_FOUND = {
   code: 404,
@@ -117,9 +160,28 @@ export async function ciPlan(
   if (file === null) return everything("no config");
   const parsed = parseConfig(file.source);
   if (!parsed.ok) return everything("invalid config");
-  if (ciUnits(parsed.config).length === 0) {
-    return everything("no ci units configured");
-  }
+  const configured = ciUnits(parsed.config).map((unit) => unit.id);
+  if (configured.length === 0) return everything("no ci units configured");
+
+  // The units the asking run will execute, so its outcome can say they passed
+  // at this head. Only answers it acts on are recorded, never pending ones.
+  const record = async (units: string[], base: string) => {
+    if (query.run_id === undefined || query.run_attempt === undefined) return;
+    const now = deps.now?.() ?? new Date();
+    if (!(await runAsked(repo, repository.id, query.run_id, query, now))) {
+      return;
+    }
+    await deps.store.saveRun({
+      installationId: installation.id,
+      repoId: repository.id,
+      runId: query.run_id,
+      attempt: query.run_attempt,
+      number: query.pull_request,
+      head: query.sha,
+      base,
+      units,
+    });
+  };
 
   const key: PlanKey = {
     repoId: repository.id,
@@ -128,25 +190,27 @@ export async function ciPlan(
     baseRef: pull.base.ref,
     config: await ciConfigHash(parsed.config),
   };
-  const decisions = await deps.store.findPlan(key);
-  if (decisions !== null) {
+  const plan = await deps.store.findPlan(key);
+  if (plan !== null) {
+    const { decisions } = plan;
+    const all = decisions.every((d) => d.score === null);
+    const units = decisions.filter((d) => d.run).map((d) => d.unit);
+    await record(all ? configured : units, plan.base);
     return {
       code: 200,
-      body: {
-        status: "ready",
-        all: decisions.every((d) => d.score === null),
-        units: decisions.filter((d) => d.run).map((d) => d.unit),
-        decisions,
-        url,
-      },
+      body: { status: "ready", all, units, decisions, url },
     };
   }
   // An old run of a push that a newer one replaced; only the head is planned.
   if (pull.head.sha !== query.sha) {
+    await record(configured, pull.base.sha);
     return everything("a newer push superseded this commit");
   }
   // Webhooks plan only open pull requests, and nothing gates a closed one's CI.
-  if (pull.state !== "open") return everything("the pull request isn't open");
+  if (pull.state !== "open") {
+    await record(configured, pull.base.sha);
+    return everything("the pull request isn't open");
+  }
   // Anyone can ask, as often as they like, so only the first ask in a lease
   // queues a plan. The claim lapses rather than being released, unless the
   // plan never made it into the queue.

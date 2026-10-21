@@ -64,6 +64,14 @@ const PlanRow = v.pipe(
   PlanEntry,
 );
 
+/** A unit_passes row, as lastPasses reads it. */
+const PassRow = v.object({
+  unit: v.string(),
+  head_sha: v.string(),
+  base_sha: v.string(),
+  passed_at: v.string(),
+});
+
 /** One of recentActivity's rows: an item, and its run and plan if it has them. */
 function activityItem(row: Record<string, unknown>): ActivityItem {
   // The run's and plan's columns are prefixed, so each parses as its own row.
@@ -139,6 +147,30 @@ export type CiPlan = {
   inputTokens: number;
 };
 
+/** A saved plan's decisions, and the base commit it was judged against. */
+export type FoundPlan = { decisions: UnitDecision[]; base: string };
+
+/** A workflow run's attempt, and the units its plan step told it to execute. */
+export type CiRun = {
+  installationId: number;
+  repoId: number;
+  runId: number;
+  attempt: number;
+  number: number;
+  head: string;
+  base: string;
+  units: string[];
+};
+
+/** Where a unit last passed for a pull request, and when. */
+export type UnitPass = { head: string; base: string; at: string };
+
+/**
+ * How long a workflow run's units wait for it to complete. Hosted jobs stop
+ * after hours, but a run can sit waiting for approval for longer.
+ */
+export const CI_RUN_RETENTION_DAYS = 7;
+
 export type LabelRun = {
   installationId: number;
   repoId: number;
@@ -169,9 +201,25 @@ export interface Store {
   claim(claim: Claim, owner: string): Promise<boolean>;
   /** Release the claim if `owner` still holds it. */
   release(claim: Claim, owner: string): Promise<void>;
-  /** A plan's decisions, or null if there's none for that key yet. */
-  findPlan(key: PlanKey): Promise<UnitDecision[] | null>;
+  /** A plan's decisions and base, or null if there's none for that key yet. */
+  findPlan(key: PlanKey): Promise<FoundPlan | null>;
   savePlan(plan: CiPlan): Promise<void>;
+  /** Saves the units a run's attempt executes; the first save stands. */
+  saveRun(run: CiRun): Promise<void>;
+  /**
+   * The units the given attempt of a run executes: its own, or the latest
+   * earlier attempt's. Re-running only failed jobs skips the plan step, so
+   * that attempt never asks and runs what the attempt before it planned.
+   */
+  findRun(
+    repoId: number,
+    runId: number,
+    attempt: number,
+  ): Promise<CiRun | null>;
+  /** Records that every unit the run executed passed at its head and base. */
+  savePasses(run: CiRun): Promise<void>;
+  /** Each unit's most recent pass for a pull request, by unit id. */
+  lastPasses(repoId: number, number: number): Promise<Map<string, UnitPass>>;
   saveInstallation(
     id: number,
     account: string,
@@ -326,17 +374,23 @@ export class CloudflareStore implements Store {
       .run();
   }
 
-  async findPlan(key: PlanKey): Promise<UnitDecision[] | null> {
-    const decisions = await this.db
+  async findPlan(key: PlanKey): Promise<FoundPlan | null> {
+    const row = await this.db
       .prepare(
-        `SELECT decisions FROM ci_plans
+        `SELECT decisions, base_sha FROM ci_plans
          WHERE repo_id = ? AND number = ? AND head_sha = ? AND base_ref = ? AND config = ?`,
       )
       .bind(key.repoId, key.number, key.head, key.baseRef, key.config)
-      .first<string>("decisions");
-    return decisions === null
-      ? null
-      : v.parse(v.array(UnitDecision), JSON.parse(decisions));
+      .first();
+    if (row === null) return null;
+    const plan = v.parse(
+      v.object({ decisions: v.string(), base_sha: v.string() }),
+      row,
+    );
+    return {
+      decisions: v.parse(v.array(UnitDecision), JSON.parse(plan.decisions)),
+      base: plan.base_sha,
+    };
   }
 
   async savePlan(plan: CiPlan) {
@@ -362,6 +416,114 @@ export class CloudflareStore implements Store {
         plan.inputTokens,
       )
       .run();
+  }
+
+  async saveRun(run: CiRun) {
+    await this.db
+      .prepare(
+        `INSERT OR IGNORE INTO ci_runs
+           (installation_id, repo_id, run_id, run_attempt, number, head_sha, base_sha, units)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        run.installationId,
+        run.repoId,
+        run.runId,
+        run.attempt,
+        run.number,
+        run.head,
+        run.base,
+        JSON.stringify(run.units),
+      )
+      .run();
+  }
+
+  async findRun(
+    repoId: number,
+    runId: number,
+    attempt: number,
+  ): Promise<CiRun | null> {
+    const row = await this.db
+      .prepare(
+        `SELECT installation_id, run_attempt, number, head_sha, base_sha, units
+         FROM ci_runs WHERE repo_id = ? AND run_id = ? AND run_attempt <= ?
+         ORDER BY run_attempt DESC LIMIT 1`,
+      )
+      .bind(repoId, runId, attempt)
+      .first();
+    if (row === null) return null;
+    const run = v.parse(
+      v.object({
+        installation_id: v.number(),
+        run_attempt: v.number(),
+        number: v.number(),
+        head_sha: v.string(),
+        base_sha: v.string(),
+        units: v.string(),
+      }),
+      row,
+    );
+    return {
+      installationId: run.installation_id,
+      repoId,
+      runId,
+      attempt: run.run_attempt,
+      number: run.number,
+      head: run.head_sha,
+      base: run.base_sha,
+      units: v.parse(v.array(v.string()), JSON.parse(run.units)),
+    };
+  }
+
+  async savePasses(run: CiRun) {
+    if (run.units.length === 0) return;
+    const insert = this.db.prepare(
+      `INSERT OR IGNORE INTO unit_passes
+         (installation_id, repo_id, number, unit, head_sha, base_sha, run_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    );
+    await this.db.batch(
+      run.units.map((unit) =>
+        insert.bind(
+          run.installationId,
+          run.repoId,
+          run.number,
+          unit,
+          run.head,
+          run.base,
+          run.runId,
+        ),
+      ),
+    );
+  }
+
+  async lastPasses(
+    repoId: number,
+    number: number,
+  ): Promise<Map<string, UnitPass>> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT unit, head_sha, base_sha, passed_at FROM unit_passes p
+         WHERE repo_id = ?1 AND number = ?2 AND id = (
+           SELECT MAX(id) FROM unit_passes
+           WHERE repo_id = p.repo_id AND number = p.number AND unit = p.unit
+         )`,
+      )
+      .bind(repoId, number)
+      .all();
+    return new Map(
+      results.map((result) => {
+        const row = v.parse(PassRow, result);
+        return [
+          row.unit,
+          {
+            head: row.head_sha,
+            base: row.base_sha,
+            at: sqliteTime(row.passed_at),
+          },
+        ];
+      }),
+    );
   }
 
   /**
@@ -443,9 +605,12 @@ export class CloudflareStore implements Store {
       .run();
   }
 
-  /** Forgets an installation's runs and plans, or only some repositories'. */
+  /**
+   * Forgets an installation's runs, plans, workflow runs and unit passes, or
+   * only some repositories'.
+   */
   async forgetRuns(installationId: number, repoIds?: number[]) {
-    const tables = ["label_runs", "ci_plans"];
+    const tables = ["label_runs", "ci_plans", "ci_runs", "unit_passes"];
     if (repoIds === undefined) {
       await this.db.batch(
         tables.map((table) =>
@@ -465,7 +630,10 @@ export class CloudflareStore implements Store {
     if (removals.length > 0) await this.db.batch(removals);
   }
 
-  /** Deletes runs and plans older than the given number of days, and old claims. */
+  /**
+   * Deletes runs, plans and unit passes older than the given number of days,
+   * and old claims and workflow runs.
+   */
   async pruneRuns(days: number) {
     await this.db.batch([
       ...["label_runs", "ci_plans"].map((table) =>
@@ -473,6 +641,13 @@ export class CloudflareStore implements Store {
           .prepare(`DELETE FROM ${table} WHERE created_at < datetime('now', ?)`)
           .bind(`-${days} days`),
       ),
+      this.db
+        .prepare("DELETE FROM unit_passes WHERE passed_at < datetime('now', ?)")
+        .bind(`-${days} days`),
+      // A workflow run's units matter only until it completes.
+      this.db
+        .prepare("DELETE FROM ci_runs WHERE created_at < datetime('now', ?)")
+        .bind(`-${CI_RUN_RETENTION_DAYS} days`),
       // A claim matters only while its job runs, and the run or plan it saves
       // keeps the work from repeating after that.
       this.db.prepare(

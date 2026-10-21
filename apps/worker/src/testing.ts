@@ -1,12 +1,19 @@
 import type { PullFile, Request, Response } from "@sargunv/rubberstamp-core";
 
-import type { Issue, ListedItem, RepoApi } from "./github/client.ts";
+import type {
+  Issue,
+  ListedItem,
+  RepoApi,
+  WorkflowRun,
+} from "./github/client.ts";
 import type {
   CiPlan,
+  CiRun,
   Claim,
   LabelRun,
   PlanKey,
   Store,
+  UnitPass,
   UsageKind,
 } from "./store.ts";
 
@@ -106,6 +113,9 @@ export class FakeRepo implements RepoApi {
   addLabels = async (_: number, labels: string[]) => {
     this.added.push(...labels);
   };
+  /** The repository's workflow runs, by id. */
+  workflowRuns = new Map<number, WorkflowRun>();
+  workflowRun = async (runId: number) => this.workflowRuns.get(runId) ?? null;
 }
 
 export class FakeStore implements Store {
@@ -151,8 +161,59 @@ export class FakeStore implements Store {
         plan.head === key.head &&
         plan.baseRef === key.baseRef &&
         plan.config === key.config,
-    )?.decisions ?? null;
+    ) ?? null;
   savePlan = async (plan: CiPlan) => {
     this.plans.push(plan);
+  };
+  /** Workflow runs by repository, run and attempt; the first save stands. */
+  ciRuns = new Map<string, CiRun>();
+  saveRun = async (run: CiRun) => {
+    const key = `${run.repoId} ${run.runId} ${run.attempt}`;
+    if (!this.ciRuns.has(key)) this.ciRuns.set(key, run);
+  };
+  findRun = async (repoId: number, runId: number, attempt: number) =>
+    [...this.ciRuns.values()]
+      .filter(
+        (run) =>
+          run.repoId === repoId &&
+          run.runId === runId &&
+          run.attempt <= attempt,
+      )
+      .sort((a, b) => b.attempt - a.attempt)[0] ?? null;
+  /** Each pass in the order recorded, like unit_passes. */
+  passes: (UnitPass & {
+    repoId: number;
+    number: number;
+    unit: string;
+    runId: number;
+  })[] = [];
+  /** When the next pass is recorded. */
+  now = "2026-10-21T00:00:00Z";
+  savePasses = async (run: CiRun) => {
+    for (const unit of run.units) {
+      const seen = this.passes.some(
+        (p) =>
+          p.repoId === run.repoId && p.runId === run.runId && p.unit === unit,
+      );
+      if (seen) continue;
+      this.passes.push({
+        repoId: run.repoId,
+        number: run.number,
+        unit,
+        runId: run.runId,
+        head: run.head,
+        base: run.base,
+        at: this.now,
+      });
+    }
+  };
+  lastPasses = async (repoId: number, number: number) => {
+    const last = new Map<string, UnitPass>();
+    for (const { unit, head, base, at, ...pass } of this.passes) {
+      if (pass.repoId === repoId && pass.number === number) {
+        last.set(unit, { head, base, at });
+      }
+    }
+    return last;
   };
 }

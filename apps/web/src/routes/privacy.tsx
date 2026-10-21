@@ -62,6 +62,11 @@ function Privacy() {
             the model. Plans are deleted on the same schedule as the label log.
           </li>
           <li>
+            <b>Which CI passed:</b> for each pull request commit, which CI units
+            each successful workflow run executed, the run, and when. These are
+            deleted on the same schedule as the label log.
+          </li>
+          <li>
             <b>Previews you run in the dashboard:</b> the titles, labels and
             scores of the items previewed, and the config used. A preview is
             deleted after 60 days without anyone opening it. Uninstalling
@@ -102,6 +107,11 @@ function Privacy() {
             Workflows ask Rubberstamp for a pull request's CI plan so they can
             skip what it doesn't need. Asking can make Rubberstamp plan a pull
             request it hasn't yet, just as a push would.
+          </li>
+          <li>
+            A workflow asking for a plan names its run, and Rubberstamp keeps
+            which units that run will execute for a week. When GitHub reports
+            that the run succeeded, Rubberstamp records those units as passed.
           </li>
           <li>
             For a public repository, anyone can ask for a pull request's plan:

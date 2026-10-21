@@ -97,6 +97,16 @@ const Repository = v.object({
 
 export type Repository = v.InferOutput<typeof Repository>;
 
+const WorkflowRun = v.object({
+  id: v.number(),
+  event: v.string(),
+  head_sha: v.string(),
+  created_at: v.string(),
+  repository: v.object({ id: v.number() }),
+});
+
+export type WorkflowRun = v.InferOutput<typeof WorkflowRun>;
+
 export type ConfigFile = { path: string; source: string };
 
 const ListedItem = v.object({
@@ -132,6 +142,8 @@ export interface RepoApi {
   /** A pull request's changed files, up to the first thousand. */
   pullFiles(number: number): Promise<PullFile[]>;
   addLabels(number: number, labels: string[]): Promise<void>;
+  /** A GitHub Actions workflow run, or null if the repository has none. */
+  workflowRun(runId: number): Promise<WorkflowRun | null>;
 }
 
 type Send = (
@@ -341,6 +353,16 @@ class RepoClient implements RepoApi {
       `/repos/${this.fullName}/issues/${number}/labels`,
       { labels },
     );
+  }
+
+  async workflowRun(runId: number): Promise<WorkflowRun | null> {
+    const path = `/repos/${this.fullName}/actions/runs/${runId}`;
+    const response = await this.send("GET", path);
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new GitHubError(response.status, path, await response.text());
+    }
+    return v.parse(WorkflowRun, await response.json());
   }
 }
 

@@ -13,7 +13,7 @@ import {
   RETRY_AFTER_SECONDS,
   type PlanQueryDeps,
 } from "./ci-plan.ts";
-import { GitHubError, type Issue } from "./github/client.ts";
+import { GitHubError, type Issue, type WorkflowRun } from "./github/client.ts";
 import type { PlanJob } from "./jobs/plan.ts";
 import { CONFIG as LABELS_ONLY, FakeRepo, FakeStore } from "./testing.ts";
 
@@ -27,6 +27,7 @@ ci:
 const HEAD = "a".repeat(40);
 const OLD = "b".repeat(40);
 const URL = "https://rubberstamp.example/o/r";
+const NOW = new Date("2026-10-21T12:00:00Z");
 
 const pull: Issue = {
   title: "Fix camera",
@@ -70,6 +71,7 @@ function setup(
     },
     policy: { privateAllowlist: parseAllowlist(options.allow ?? "o/*") },
     origin: "https://rubberstamp.example",
+    now: () => NOW,
   };
   // Saved under the config the repository has now, unless told otherwise.
   const save = async (
@@ -252,6 +254,132 @@ describe("ciPlan", () => {
     expect(jobs).toHaveLength(1);
   });
 
+  describe("records the units the asking run executes", () => {
+    const run = { run_id: 9001, run_attempt: 2 };
+
+    /** The run as GitHub reports it, started an hour ago at the head. */
+    const ranOn = (repo: FakeRepo, overrides: Partial<WorkflowRun> = {}) => {
+      repo.workflowRuns.set(9001, {
+        id: 9001,
+        event: "pull_request",
+        head_sha: HEAD,
+        created_at: "2026-10-21T11:00:00Z",
+        repository: { id: repo.repoId },
+        ...overrides,
+      });
+    };
+
+    it("from the plan it follows", async () => {
+      const { deps, repo, save, store } = setup();
+      ranOn(repo);
+      await save(HEAD, judged);
+
+      await ciPlan(query(run), null, deps);
+      expect([...store.ciRuns.values()]).toEqual([
+        {
+          installationId: 1,
+          repoId: 2,
+          runId: 9001,
+          attempt: 2,
+          number: 3,
+          head: HEAD,
+          base: "base123",
+          units: ["linux"],
+        },
+      ]);
+    });
+
+    it("as every configured unit when every unit runs", async () => {
+      const { deps, repo, save, store } = setup();
+      ranOn(repo);
+      await save(HEAD, [
+        { unit: "linux", threshold: 0.5, run: true, score: null, rule: "x" },
+        { unit: "macos", threshold: 0.5, run: true, score: null, rule: "x" },
+      ]);
+
+      await ciPlan(query(run), null, deps);
+      expect(store.ciRuns.get("2 9001 2")?.units).toEqual(["linux", "macos"]);
+    });
+
+    it("against the pull request's base when there's no plan to follow", async () => {
+      const { deps, repo, store } = setup();
+      ranOn(repo, { head_sha: OLD });
+
+      await ciPlan(query({ ...run, sha: OLD }), null, deps);
+      expect(store.ciRuns.get("2 9001 2")).toMatchObject({
+        head: OLD,
+        base: "base123",
+        units: ["linux", "macos"],
+      });
+    });
+
+    it("keeping the first record when the run asks again", async () => {
+      const { deps, repo, save, store } = setup();
+      ranOn(repo);
+      await save(HEAD, judged);
+      await ciPlan(query(run), null, deps);
+      store.plans = [];
+      await save(
+        HEAD,
+        judged.map((d) => ({ ...d, run: !d.run })),
+      );
+      await ciPlan(query(run), null, deps);
+      expect([...store.ciRuns.values()].map((r) => r.units)).toEqual([
+        ["linux"],
+      ]);
+    });
+
+    it("but not while the plan is pending", async () => {
+      const { deps, repo, store } = setup();
+      ranOn(repo);
+      const reply = await ciPlan(query({ ...run, start: true }), null, deps);
+      expect(reply.code).toBe(202);
+      expect(store.ciRuns.size).toBe(0);
+    });
+
+    it("but not when no units are configured", async () => {
+      const { deps, repo, store } = setup({ source: LABELS_ONLY });
+      ranOn(repo);
+      await ciPlan(query(run), null, deps);
+      expect(store.ciRuns.size).toBe(0);
+    });
+
+    it("but not for an action too old to name its run", async () => {
+      const { deps, repo, save, store } = setup();
+      ranOn(repo);
+      await save(HEAD, judged);
+      expect((await ciPlan(query(), null, deps)).code).toBe(200);
+      expect(store.ciRuns.size).toBe(0);
+    });
+
+    it.each<[string, Partial<WorkflowRun>]>([
+      ["at another head", { head_sha: OLD }],
+      ["for another event", { event: "pull_request_target" }],
+      ["in another repository", { repository: { id: 99 } }],
+      ["started over a day ago", { created_at: "2026-10-20T11:59:59Z" }],
+    ])("but not for a run %s", async (_, overrides) => {
+      const { deps, repo, save, store } = setup();
+      ranOn(repo, overrides);
+      await save(HEAD, judged);
+
+      const reply = await ciPlan(query(run), null, deps);
+      expect(reply.body).toMatchObject({ status: "ready", units: ["linux"] });
+      expect(store.ciRuns.size).toBe(0);
+    });
+
+    it("but not for a run GitHub doesn't know, or can't say", async () => {
+      const { deps, repo, save, store } = setup();
+      await save(HEAD, judged);
+      expect((await ciPlan(query(run), null, deps)).code).toBe(200);
+
+      repo.workflowRun = async () => {
+        throw new GitHubError(502, "/repos/o/r/actions/runs/9001", "Bad");
+      };
+      expect((await ciPlan(query(run), null, deps)).code).toBe(200);
+      expect(store.ciRuns.size).toBe(0);
+    });
+  });
+
   it("doesn't serve a private repository off the allowlist", async () => {
     const { deps, repo } = setup({ tokens: ["good"], allow: "" });
     repo.private = true;
@@ -287,7 +415,20 @@ describe("PlanQuery", () => {
     });
   });
 
+  it("accepts the run that asks", () => {
+    const parsed = v.parse(PlanQuery, {
+      repository: "o/r",
+      pull_request: 12,
+      sha: HEAD,
+      run_id: 18_000_000_000,
+      run_attempt: 1,
+    });
+    expect(parsed).toMatchObject({ run_id: 18_000_000_000, run_attempt: 1 });
+  });
+
   it.each([
+    { repository: "o/r", pull_request: 1, sha: HEAD, run_id: 0 },
+    { repository: "o/r", pull_request: 1, sha: HEAD, run_attempt: "1" },
     { repository: "../r", pull_request: 1, sha: HEAD },
     { repository: "o/..", pull_request: 1, sha: HEAD },
     { repository: "o/r/x", pull_request: 1, sha: HEAD },
