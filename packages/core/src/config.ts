@@ -44,10 +44,12 @@ const UnitId = v.pipe(
 const CiUnit = v.strictObject({
   covers: Text,
   paths: v.optional(v.array(Text), []),
+  threshold: v.optional(Threshold),
 });
 
 const CiSection = v.strictObject({
   context: v.optional(Text),
+  threshold: v.optional(Threshold),
   units: v.pipe(
     v.record(UnitId, CiUnit),
     v.check((units) => Object.keys(units).length > 0, "name at least one unit"),

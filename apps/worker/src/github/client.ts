@@ -69,6 +69,17 @@ const File = v.object({
 
 export type Issue = v.InferOutput<typeof Issue>;
 
+const Pull = v.object({
+  title: v.string(),
+  body: v.nullable(v.string()),
+  state: v.string(),
+  head: v.object({ sha: v.string() }),
+  base: v.object({ sha: v.string() }),
+  changed_files: v.number(),
+});
+
+export type Pull = v.InferOutput<typeof Pull>;
+
 export type ConfigFile = { path: string; source: string };
 
 const ListedItem = v.object({
@@ -98,6 +109,8 @@ export interface RepoApi {
   /** The newest issues and pull requests, newest first. */
   recentItems(count: number): Promise<ListedItem[]>;
   issue(number: number): Promise<Issue>;
+  pull(number: number): Promise<Pull>;
+  /** A pull request's changed files, up to the first thousand. */
   pullFiles(number: number): Promise<PullFile[]>;
   addLabels(number: number, labels: string[]): Promise<void>;
 }
@@ -109,7 +122,8 @@ type Send = (
 ) => Promise<Response>;
 
 const PAGE = 100;
-// Labels read only the first part of a diff, so a thousand files is plenty.
+// Labels read only the first part of a diff, and CI plans every unit for a
+// change this large, so a thousand files is plenty.
 const MAX_FILE_PAGES = 10;
 
 export class GitHubApp {
@@ -268,6 +282,10 @@ class RepoClient implements RepoApi {
 
   issue(number: number): Promise<Issue> {
     return this.json(Issue, "GET", `/repos/${this.fullName}/issues/${number}`);
+  }
+
+  pull(number: number): Promise<Pull> {
+    return this.json(Pull, "GET", `/repos/${this.fullName}/pulls/${number}`);
   }
 
   pullFiles(number: number): Promise<PullFile[]> {

@@ -15,6 +15,7 @@ import {
   getAccount,
   getLog,
   getMe,
+  getPlans,
   getPreview,
   getRepo,
   getRepos,
@@ -50,6 +51,12 @@ export const logQuery = (repo: string) =>
   queryOptions({
     queryKey: ["repo", repo, "log"],
     queryFn: () => getLog(repo),
+  });
+
+export const plansQuery = (repo: string) =>
+  queryOptions({
+    queryKey: ["repo", repo, "plans"],
+    queryFn: () => getPlans(repo),
   });
 
 export const previewQuery = (repo: string) =>

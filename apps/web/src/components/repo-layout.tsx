@@ -52,6 +52,9 @@ export function RepoFrame({
           <TabLink to="/$owner/$repo/preview" params={{ owner, repo: name }}>
             Preview
           </TabLink>
+          <TabLink to="/$owner/$repo/ci" params={{ owner, repo: name }}>
+            CI
+          </TabLink>
         </TabList>
       ) : null}
       {children}

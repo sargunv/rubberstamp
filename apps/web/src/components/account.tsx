@@ -180,7 +180,7 @@ export function AccountPage({ account }: { account: Account }) {
                       · Labeled {when.format(new Date(entry.createdAt))}
                     </>
                   }
-                  labels={
+                  chips={
                     entry.added.length === 0 ? (
                       <Notice className="text-sm">No labels added</Notice>
                     ) : (

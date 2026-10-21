@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { UnitDecision } from "./ci.ts";
 import { Preview, PreviewGroup } from "./preview.ts";
 
 /** The signed-in user. */
@@ -107,6 +108,24 @@ export type LogEntry = v.InferOutput<typeof LogEntry>;
 export const Log = v.object({ entries: v.array(LogEntry) });
 
 export type Log = v.InferOutput<typeof Log>;
+
+/** A pull request head's CI plan. */
+export const PlanEntry = v.object({
+  number: v.number(),
+  title: v.string(),
+  head: v.string(),
+  /** Null when a rule planned every unit without asking Jev. */
+  model: v.nullable(v.string()),
+  decisions: v.array(UnitDecision),
+  inputTokens: v.number(),
+  createdAt: v.string(),
+});
+
+export type PlanEntry = v.InferOutput<typeof PlanEntry>;
+
+export const Plans = v.object({ plans: v.array(PlanEntry) });
+
+export type Plans = v.InferOutput<typeof Plans>;
 
 /** A label run anywhere in an account, for its activity list. */
 export const ActivityEntry = v.object({

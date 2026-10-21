@@ -1,8 +1,10 @@
 import {
   LogEntry,
+  PlanEntry,
   type ActivityEntry,
   type LabelDecision,
   type PreviewGroup,
+  type UnitDecision,
 } from "@sargunv/rubberstamp-core";
 import * as v from "valibot";
 
@@ -38,6 +40,45 @@ const RunRow = v.pipe(
   LogEntry,
 );
 
+/** A ci_plans row, as the CI tab shows it. */
+const PlanRow = v.pipe(
+  v.object({
+    number: v.number(),
+    title: v.string(),
+    head_sha: v.string(),
+    model: v.nullable(v.string()),
+    decisions: v.string(),
+    input_tokens: v.number(),
+    created_at: v.string(),
+  }),
+  v.transform((row) => ({
+    number: row.number,
+    title: row.title,
+    head: row.head_sha,
+    model: row.model,
+    decisions: JSON.parse(row.decisions),
+    inputTokens: row.input_tokens,
+    createdAt: sqliteTime(row.created_at),
+  })),
+  PlanEntry,
+);
+
+/** What spent Jev usage, within the same allowance. */
+export type UsageKind = "labels" | "ci";
+
+export type CiPlan = {
+  installationId: number;
+  repoId: number;
+  repo: string;
+  number: number;
+  title: string;
+  head: string;
+  base: string;
+  model: string | null;
+  decisions: UnitDecision[];
+  inputTokens: number;
+};
+
 export type LabelRun = {
   installationId: number;
   repoId: number;
@@ -60,9 +101,12 @@ export interface Store {
     installationId: number,
     period: string,
     repo: string,
+    kind: UsageKind,
     tokens: number,
   ): Promise<void>;
   saveLabelRun(run: LabelRun): Promise<void>;
+  hasPlan(repoId: number, number: number, head: string): Promise<boolean>;
+  savePlan(plan: CiPlan): Promise<void>;
   saveInstallation(
     id: number,
     account: string,
@@ -100,7 +144,8 @@ export class CloudflareStore implements Store {
   ): Promise<{ repo: string; tokens: number }[]> {
     const { results } = await this.db
       .prepare(
-        "SELECT repo, input_tokens FROM usage WHERE installation_id = ? AND period = ?",
+        `SELECT repo, SUM(input_tokens) AS input_tokens FROM usage
+         WHERE installation_id = ? AND period = ? GROUP BY repo`,
       )
       .bind(installationId, period)
       .all();
@@ -173,16 +218,62 @@ export class CloudflareStore implements Store {
     installationId: number,
     period: string,
     repo: string,
+    kind: UsageKind,
     tokens: number,
   ) {
     await this.db
       .prepare(
-        `INSERT INTO usage (installation_id, period, repo, input_tokens) VALUES (?, ?, ?, ?)
-         ON CONFLICT (installation_id, period, repo)
+        `INSERT INTO usage (installation_id, period, repo, kind, input_tokens) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (installation_id, period, repo, kind)
          DO UPDATE SET input_tokens = input_tokens + excluded.input_tokens`,
       )
-      .bind(installationId, period, repo, tokens)
+      .bind(installationId, period, repo, kind, tokens)
       .run();
+  }
+
+  async hasPlan(repoId: number, number: number, head: string) {
+    const row = await this.db
+      .prepare(
+        "SELECT 1 FROM ci_plans WHERE repo_id = ? AND number = ? AND head_sha = ?",
+      )
+      .bind(repoId, number, head)
+      .first();
+    return row !== null;
+  }
+
+  async savePlan(plan: CiPlan) {
+    // A redelivered webhook can plan the same head twice; the first plan stands.
+    await this.db
+      .prepare(
+        `INSERT OR IGNORE INTO ci_plans
+           (installation_id, repo_id, repo, number, title, head_sha, base_sha, model, decisions, input_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        plan.installationId,
+        plan.repoId,
+        plan.repo,
+        plan.number,
+        plan.title,
+        plan.head,
+        plan.base,
+        plan.model,
+        JSON.stringify(plan.decisions),
+        plan.inputTokens,
+      )
+      .run();
+  }
+
+  /** A repository's newest CI plans, newest first. */
+  async recentPlans(repo: string, limit: number): Promise<PlanEntry[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT number, title, head_sha, model, decisions, input_tokens, created_at
+         FROM ci_plans WHERE repo = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+      )
+      .bind(repo, limit)
+      .all();
+    return results.map((row) => v.parse(PlanRow, row));
   }
 
   async saveLabelRun(run: LabelRun) {
@@ -233,28 +324,36 @@ export class CloudflareStore implements Store {
     return results.map((row) => v.parse(RunRow, row));
   }
 
-  /** Forgets an installation's runs, or only those of some repositories. */
+  /** Forgets an installation's runs and plans, or only some repositories'. */
   async forgetRuns(installationId: number, repoIds?: number[]) {
+    const tables = ["label_runs", "ci_plans"];
     if (repoIds === undefined) {
-      await this.db
-        .prepare("DELETE FROM label_runs WHERE installation_id = ?")
-        .bind(installationId)
-        .run();
+      await this.db.batch(
+        tables.map((table) =>
+          this.db
+            .prepare(`DELETE FROM ${table} WHERE installation_id = ?`)
+            .bind(installationId),
+        ),
+      );
       return;
     }
-    const remove = this.db.prepare(
-      "DELETE FROM label_runs WHERE installation_id = ? AND repo_id = ?",
-    );
-    if (repoIds.length > 0) {
-      await this.db.batch(repoIds.map((id) => remove.bind(installationId, id)));
-    }
+    const removals = tables.flatMap((table) => {
+      const remove = this.db.prepare(
+        `DELETE FROM ${table} WHERE installation_id = ? AND repo_id = ?`,
+      );
+      return repoIds.map((id) => remove.bind(installationId, id));
+    });
+    if (removals.length > 0) await this.db.batch(removals);
   }
 
-  /** Deletes runs older than the given number of days. */
+  /** Deletes runs and plans older than the given number of days. */
   async pruneRuns(days: number) {
-    await this.db
-      .prepare("DELETE FROM label_runs WHERE created_at < datetime('now', ?)")
-      .bind(`-${days} days`)
-      .run();
+    await this.db.batch(
+      ["label_runs", "ci_plans"].map((table) =>
+        this.db
+          .prepare(`DELETE FROM ${table} WHERE created_at < datetime('now', ?)`)
+          .bind(`-${days} days`),
+      ),
+    );
   }
 }

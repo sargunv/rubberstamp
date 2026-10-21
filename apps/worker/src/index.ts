@@ -5,19 +5,24 @@ import { api, auth } from "./api.ts";
 import { budgetFor } from "./budget.ts";
 import { verifyWebhook } from "./github/auth.ts";
 import { runLabelJob } from "./jobs/label.ts";
+import { runPlanJob } from "./jobs/plan.ts";
 import { services } from "./services.ts";
 import { CloudflareStore } from "./store.ts";
 import { webhookEffects } from "./webhooks.ts";
 
 export { RepoPreviews } from "./preview/object.ts";
 
-const Job = v.object({
-  type: v.literal("label"),
+const JobFields = {
   installationId: v.number(),
   repoId: v.number(),
   repo: v.string(),
   number: v.number(),
-});
+};
+
+const Job = v.variant("type", [
+  v.object({ type: v.literal("label"), ...JobFields }),
+  v.object({ type: v.literal("plan"), ...JobFields, head: v.string() }),
+]);
 
 /** How long a live run's decisions are kept. */
 const RUN_RETENTION_DAYS = 180;
@@ -69,15 +74,22 @@ export default {
         message.ack();
         continue;
       }
+      const deps = {
+        repo: github.repo(job.output.installationId, job.output.repo),
+        store,
+        ask: jev,
+        model: env.JEV_MODEL,
+        budget: budgetFor(budgets, job.output.repo.split("/")[0] ?? ""),
+      };
       try {
-        const outcome = await runLabelJob(job.output, {
-          repo: github.repo(job.output.installationId, job.output.repo),
-          store,
-          ask: jev,
-          model: env.JEV_MODEL,
-          budget: budgetFor(budgets, job.output.repo.split("/")[0] ?? ""),
-        });
-        console.log(`${job.output.repo}#${job.output.number}`, outcome);
+        const outcome =
+          job.output.type === "label"
+            ? await runLabelJob(job.output, deps)
+            : await runPlanJob(job.output, deps);
+        console.log(
+          `${job.output.type} ${job.output.repo}#${job.output.number}`,
+          outcome,
+        );
         message.ack();
       } catch (error) {
         console.error(`${job.output.repo}#${job.output.number}`, error);

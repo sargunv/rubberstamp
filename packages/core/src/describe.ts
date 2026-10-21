@@ -18,7 +18,7 @@ export type Item =
       files: PullFile[];
     };
 
-const BODY_LIMIT = 8_000;
+export const BODY_LIMIT = 8_000;
 const FILE_LIMIT = 24_000;
 const SUMMARY_FILE_LIMIT = 3_000;
 const FILE_LIST_LIMIT = 24_000;
