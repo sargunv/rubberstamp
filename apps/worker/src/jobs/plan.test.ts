@@ -449,6 +449,23 @@ describe("runPlanJob since a unit last passed", () => {
     expect(requests).toEqual([]);
   });
 
+  it("judges an edit that moved to another hunk on the same base", async () => {
+    const moved = file("src/map.cpp", "@@ -40,2 +40,3 @@\n z\n+log();\n w");
+    const { repo, requests, run } = setup([moved], both(OLD, OLD_BASE));
+    repo.comparisons.set(`${OLD_BASE}...${OLD}`, [
+      file("src/map.cpp", "@@ -10,2 +10,3 @@\n x\n+log();\n y"),
+    ]);
+    expect(await run()).toMatchObject({
+      decisions: [
+        { score: 0.9, since: OLD },
+        { score: 0.2, since: OLD },
+      ],
+    });
+    expect(requests[0]?.state).toMatchObject({
+      change: { scope: expect.stringContaining("commit 0ld0ld0") },
+    });
+  });
+
   it("finds no changes when only main advanced", async () => {
     // The head passed against an older main; the branch hasn't moved since.
     const { repo, requests, run } = setup([MAP], both("abc123", OLD_BASE));

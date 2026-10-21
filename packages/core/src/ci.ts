@@ -246,22 +246,12 @@ export function noUnit(
 }
 
 /**
- * A patch's added and removed lines, without hunk headers or context. Where a
- * change sits in its file moves when the base does, as on a rebase, but the
- * change itself doesn't.
- */
-export function patchLines(patch: string): string {
-  return patch
-    .split("\n")
-    .filter((line) => line.startsWith("+") || line.startsWith("-"))
-    .join("\n");
-}
-
-/**
  * The files whose changes differ between a pull request's patches now and
- * its patches when a unit last passed, each as it is now. A file only the old
- * patches change is listed as reverted. Null when a file on either side has
- * no patch to compare, as binary and very large files don't.
+ * its patches when a unit last passed, each as it is now. Both sides must
+ * diff from the same merge base, so a patch that differs at all, even in
+ * where an edit sits, is a change. A file only the old patches change is
+ * listed as reverted. Null when a file on either side has no patch to
+ * compare, as binary and very large files don't.
  */
 export function changedSince(
   now: PullFile[],
@@ -269,11 +259,7 @@ export function changedSince(
 ): PullFile[] | null {
   if ([...now, ...then].some((file) => file.patch === undefined)) return null;
   const change = (file: PullFile) =>
-    JSON.stringify([
-      file.status,
-      file.previous_filename ?? null,
-      patchLines(file.patch ?? ""),
-    ]);
+    JSON.stringify([file.status, file.previous_filename ?? null, file.patch]);
   const before = new Map(then.map((file) => [file.filename, change(file)]));
   const present = new Set(now.map((file) => file.filename));
   return [

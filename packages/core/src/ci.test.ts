@@ -7,7 +7,6 @@ import {
   decideUnits,
   everyUnit,
   noUnit,
-  patchLines,
   planRequests,
   unitScores,
   type Change,
@@ -188,22 +187,6 @@ describe("decideUnits", () => {
   });
 });
 
-describe("patchLines", () => {
-  it("keeps only added and removed lines", () => {
-    expect(
-      patchLines(
-        "@@ -10,3 +10,3 @@ void f() {\n ctx\n-a\n+b\n ctx\n\\ No newline at end of file",
-      ),
-    ).toBe("-a\n+b");
-  });
-
-  it("ignores hunk headers and context that a rebase moves", () => {
-    const before = "@@ -1,3 +1,3 @@\n one\n-a\n+b\n two";
-    const after = "@@ -41,4 +41,4 @@ class Map {\n zero\n one\n-a\n+b";
-    expect(patchLines(before)).toBe(patchLines(after));
-  });
-});
-
 describe("changedSince", () => {
   const file = (filename: string, patch: string) => ({
     ...FILE,
@@ -211,13 +194,21 @@ describe("changedSince", () => {
     patch,
   });
 
-  it("finds nothing when only line numbers and context moved", () => {
+  it("finds nothing when every patch is the same", () => {
+    const patch = "@@ -20,3 +20,3 @@ void f() {\n x\n-a\n+b\n y";
+    expect(
+      changedSince([file("a.cpp", patch)], [file("a.cpp", patch)]),
+    ).toEqual([]);
+  });
+
+  it("lists a file whose same edit moved to another hunk", () => {
+    const now = file("a.cpp", "@@ -40,2 +40,3 @@ void g() {\n z\n+log();\n w");
     expect(
       changedSince(
-        [file("a.cpp", "@@ -20,3 +20,3 @@\n x\n-a\n+b\n y")],
-        [file("a.cpp", "@@ -1,2 +1,2 @@\n-a\n+b\n z")],
+        [now],
+        [file("a.cpp", "@@ -10,2 +10,3 @@ void f() {\n x\n+log();\n y")],
       ),
-    ).toEqual([]);
+    ).toEqual([now]);
   });
 
   it("lists a file whose changes were edited, as it is now", () => {
