@@ -30,6 +30,7 @@ export const RepoStatus = v.variant("status", [
     status: v.literal("ready"),
     /** The config on the default branch, resolved against the repo's labels. */
     config: v.object({
+      path: v.string(),
       source: v.string(),
       labels: v.array(
         v.object({

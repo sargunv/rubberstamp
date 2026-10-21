@@ -1,27 +1,19 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
-import { LogTab } from "../../../components/log-tab.tsx";
-import { logQuery, repoQuery } from "../../../queries.ts";
-import { repoName, useReadyRepo } from "./-shared.ts";
+import { ConfigView } from "../../../components/config-view.tsx";
+import { useReadyRepo } from "./-shared.ts";
 
 export const Route = createFileRoute("/$owner/$repo/")({
-  loader: async ({ context: { queryClient }, params }) => {
-    const name = repoName(params);
-    const status = await queryClient.ensureQueryData(repoQuery(name));
-    if (status?.status === "ready") {
-      await queryClient.ensureQueryData(logQuery(name));
-    }
-  },
-  component: function Log() {
+  component: function Config() {
     const { repo, status, colors } = useReadyRepo();
-    const { data } = useSuspenseQuery(logQuery(repo));
     return (
-      <LogTab
+      <ConfigView
         repo={repo}
-        entries={data.entries}
+        path={status.config.path}
+        source={status.config.source}
         groups={status.config.groups}
         colors={colors}
+        warnings={status.config.warnings}
       />
     );
   },

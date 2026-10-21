@@ -41,7 +41,10 @@ export class FakeRepo implements RepoApi {
     private readonly recent: ListedItem[] = [],
   ) {}
   private reads = 0;
-  config = async () => this.source;
+  config = async () =>
+    this.source === null
+      ? null
+      : { path: ".config/rubberstamp.yml", source: this.source };
   labels = async () => [
     { name: "bug", description: "Broken", color: "d73a4a" },
     { name: "feature", description: "New", color: "a2eeef" },

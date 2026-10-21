@@ -48,9 +48,9 @@ export async function runLabelJob(
   if (await store.hasLabelRun(job.repoId, job.number)) {
     return { status: "skipped", reason: "already judged" };
   }
-  const source = await repo.config();
-  if (source === null) return { status: "skipped", reason: "no config" };
-  const parsed = parseConfig(source);
+  const file = await repo.config();
+  if (file === null) return { status: "skipped", reason: "no config" };
+  const parsed = parseConfig(file.source);
   if (!parsed.ok) {
     return {
       status: "skipped",

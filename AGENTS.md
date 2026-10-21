@@ -43,13 +43,14 @@ add or replace one with `fnox set NAME` (it reads stdin or prompts). Never print
 a secret's value.
 
 Planned work lives in GitHub issues on `sargunv/rubberstamp`. Rubberstamp labels
-them itself from `.github/rubberstamp.yml`, so don't label by hand.
+them itself from `.config/rubberstamp.yml`, so don't label by hand.
 
 ## Project invariants
 
-- Configuration lives in each repository at `.github/rubberstamp.yml` and is
-  read from the default branch only. A pull request can never change how it is
-  judged.
+- Configuration lives in each repository at `.config/rubberstamp.yml` and is
+  read from the default branch only. `.github/rubberstamp.yml` is still read for
+  repositories that adopted Rubberstamp before the move; never mention it to
+  users. A pull request can never change how it is judged.
 - Rubberstamp builds every Jev state and question itself from GitHub data and
   that configuration. Nothing a caller sends becomes a question.
 - Decision logic in `packages/core` stays pure and runtime-agnostic so the web

@@ -1,4 +1,8 @@
-import { CONFIG_PATH, type PullFile } from "@sargunv/rubberstamp-core";
+import {
+  CONFIG_PATH,
+  LEGACY_CONFIG_PATH,
+  type PullFile,
+} from "@sargunv/rubberstamp-core";
 import * as v from "valibot";
 
 import { appJwt } from "./auth.ts";
@@ -59,6 +63,8 @@ const File = v.object({
 
 export type Issue = v.InferOutput<typeof Issue>;
 
+export type ConfigFile = { path: string; source: string };
+
 const ListedItem = v.object({
   number: v.number(),
   title: v.string(),
@@ -80,7 +86,8 @@ export type ListedItem = v.InferOutput<typeof ListedItem>;
 /** The calls Rubberstamp makes against one repository. */
 export interface RepoApi {
   readonly fullName: string;
-  config(): Promise<string | null>;
+  /** The config file on the default branch, or null if there is none. */
+  config(): Promise<ConfigFile | null>;
   labels(): Promise<ColoredLabel[]>;
   /** The newest issues and pull requests, newest first. */
   recentItems(count: number): Promise<ListedItem[]>;
@@ -229,16 +236,26 @@ class RepoClient implements RepoApi {
     return items;
   }
 
-  async config(): Promise<string | null> {
-    const path = `/repos/${this.fullName}/contents/${CONFIG_PATH}`;
-    const response = await this.send("GET", path, {
+  private async file(path: string): Promise<string | null> {
+    const url = `/repos/${this.fullName}/contents/${path}`;
+    const response = await this.send("GET", url, {
       accept: "application/vnd.github.raw+json",
     });
     if (response.status === 404) return null;
     if (!response.ok) {
-      throw new GitHubError(response.status, path, await response.text());
+      throw new GitHubError(response.status, url, await response.text());
     }
     return response.text();
+  }
+
+  async config(): Promise<ConfigFile | null> {
+    const [current, legacy] = await Promise.all([
+      this.file(CONFIG_PATH),
+      this.file(LEGACY_CONFIG_PATH),
+    ]);
+    if (current !== null) return { path: CONFIG_PATH, source: current };
+    if (legacy !== null) return { path: LEGACY_CONFIG_PATH, source: legacy };
+    return null;
   }
 
   labels(): Promise<ColoredLabel[]> {

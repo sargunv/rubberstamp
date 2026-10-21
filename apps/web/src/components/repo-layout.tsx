@@ -4,14 +4,14 @@ import type { ReactNode } from "react";
 
 import { Header } from "./header.tsx";
 
-/** A repository's page: its name, then tabs or why it has none. */
-export function RepoLayout({
+/** A repository's header, name, and tabs, around a tab's content. */
+export function RepoShell({
   repo,
-  status,
+  tabs,
   children,
 }: {
   repo: string;
-  status: RepoStatus | null;
+  tabs: boolean;
   children: ReactNode;
 }) {
   const [owner = "", name = ""] = repo.split("/");
@@ -23,29 +23,43 @@ export function RepoLayout({
           <span className="text-muted">{owner}/</span>
           {name}
         </h1>
-        {status?.status === "ready" ? (
-          <>
-            <nav
-              aria-label="Repository"
-              className="mt-6 mb-8 flex gap-6 border-b border-rule text-sm"
-            >
-              <Tab to="/$owner/$repo" params={{ owner, repo: name }}>
-                Log
-              </Tab>
-              <Tab to="/$owner/$repo/config" params={{ owner, repo: name }}>
-                Config
-              </Tab>
-              <Tab to="/$owner/$repo/preview" params={{ owner, repo: name }}>
-                Preview
-              </Tab>
-            </nav>
-            {children}
-          </>
-        ) : (
-          <Unready status={status} />
-        )}
+        {tabs ? (
+          <nav
+            aria-label="Repository"
+            className="mt-6 mb-8 flex gap-6 border-b border-rule text-sm"
+          >
+            <Tab to="/$owner/$repo" params={{ owner, repo: name }}>
+              Config
+            </Tab>
+            <Tab to="/$owner/$repo/log" params={{ owner, repo: name }}>
+              Log
+            </Tab>
+            <Tab to="/$owner/$repo/preview" params={{ owner, repo: name }}>
+              Preview
+            </Tab>
+          </nav>
+        ) : null}
+        {children}
       </main>
     </>
+  );
+}
+
+/** A repository's page: its name, then tabs or why it has none. */
+export function RepoLayout({
+  repo,
+  status,
+  children,
+}: {
+  repo: string;
+  status: RepoStatus | null;
+  children: ReactNode;
+}) {
+  const ready = status?.status === "ready";
+  return (
+    <RepoShell repo={repo} tabs={ready}>
+      {ready ? children : <Unready status={status} />}
+    </RepoShell>
   );
 }
 
@@ -54,7 +68,7 @@ function Tab({
   params,
   children,
 }: {
-  to: "/$owner/$repo" | "/$owner/$repo/config" | "/$owner/$repo/preview";
+  to: "/$owner/$repo" | "/$owner/$repo/log" | "/$owner/$repo/preview";
   params: { owner: string; repo: string };
   children: ReactNode;
 }) {
@@ -103,7 +117,7 @@ function Unready({ status }: { status: RepoStatus | null }) {
       return (
         <section className="mt-8 max-w-3xl">
           <p className="text-muted">
-            <code className="font-mono text-ink">.github/rubberstamp.yml</code>{" "}
+            <code className="font-mono text-ink">.config/rubberstamp.yml</code>{" "}
             has errors:
           </p>
           <ul className="mt-3 space-y-1 font-mono text-sm text-(--drop)">
@@ -122,12 +136,12 @@ function NoConfig() {
   return (
     <section className="mt-8 max-w-xl">
       <p className="text-muted">
-        No <code className="font-mono text-ink">.github/rubberstamp.yml</code>{" "}
+        No <code className="font-mono text-ink">.config/rubberstamp.yml</code>{" "}
         on the default branch. For example:
       </p>
       <figure className="mt-4 overflow-hidden rounded-[3px] border border-rule bg-sheet">
         <figcaption className="border-b border-rule px-4 py-2 font-mono text-xs text-muted">
-          .github/rubberstamp.yml
+          .config/rubberstamp.yml
         </figcaption>
         <pre className="overflow-x-auto px-4 py-3 font-mono text-sm leading-relaxed">
           {`labels:

@@ -1,6 +1,6 @@
-import { Menu } from "@base-ui/react/menu";
+import { Combobox } from "@base-ui/react/combobox";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 
 import { meQuery, reposQuery, useSignOut } from "../queries.ts";
 
@@ -16,9 +16,6 @@ export function Wordmark({ className = "" }: { className?: string }) {
 
 export function Header({ repo }: { repo?: string }) {
   const me = useQuery(meQuery).data;
-  // Only the repository menu needs the list, so it loads without blocking.
-  const repos =
-    useQuery({ ...reposQuery, enabled: repo !== undefined }).data?.repos ?? [];
   const signOut = useSignOut();
   return (
     <header className="border-b border-rule">
@@ -26,45 +23,7 @@ export function Header({ repo }: { repo?: string }) {
         <Link to="/" aria-label="Rubberstamp home" className="rounded-[3px]">
           <Wordmark />
         </Link>
-        {repo ? (
-          <Menu.Root>
-            <Menu.Trigger className="flex min-w-0 items-center gap-1.5 rounded-[3px] px-2 py-1 font-mono text-sm text-ink hover:bg-sheet data-popup-open:bg-sheet">
-              <span className="truncate">{repo}</span>
-              <Chevron />
-            </Menu.Trigger>
-            <Menu.Portal>
-              <Menu.Positioner sideOffset={6} align="start">
-                <Menu.Popup className="min-w-64 rounded-[3px] border border-rule bg-sheet p-1 shadow-[0_8px_24px_-12px_rgb(0_0_0/0.35)] outline-none">
-                  <Menu.Group>
-                    <Menu.GroupLabel className="px-3 pt-2 pb-1 text-xs text-muted">
-                      Your repositories
-                    </Menu.GroupLabel>
-                    {repos.map((r) => {
-                      const [owner = "", name = ""] = r.name.split("/");
-                      return (
-                        <Menu.Item
-                          key={r.name}
-                          render={
-                            <Link
-                              to="/$owner/$repo"
-                              params={{ owner, repo: name }}
-                            />
-                          }
-                          className="flex cursor-default items-center justify-between gap-4 rounded-[2px] px-3 py-1.5 font-mono text-sm outline-none data-highlighted:bg-violet data-highlighted:text-on-violet"
-                        >
-                          {r.name}
-                          {r.name === repo ? (
-                            <span className="font-sans text-xs">current</span>
-                          ) : null}
-                        </Menu.Item>
-                      );
-                    })}
-                  </Menu.Group>
-                </Menu.Popup>
-              </Menu.Positioner>
-            </Menu.Portal>
-          </Menu.Root>
-        ) : null}
+        {repo ? <RepoSwitcher repo={repo} /> : null}
         <div className="ml-auto flex items-center gap-3">
           {me ? (
             <img
@@ -85,6 +44,68 @@ export function Header({ repo }: { repo?: string }) {
         </div>
       </div>
     </header>
+  );
+}
+
+/** The current repository, and a searchable list to switch to another. */
+function RepoSwitcher({ repo }: { repo: string }) {
+  const navigate = useNavigate();
+  // The list loads without blocking the page; it's only for switching.
+  const names = useQuery(reposQuery).data?.repos.map((r) => r.name) ?? [];
+  return (
+    <Combobox.Root
+      items={names}
+      value={repo}
+      onValueChange={(next) => {
+        if (!next || next === repo) return;
+        const [owner = "", name = ""] = next.split("/");
+        void navigate({ to: "/$owner/$repo", params: { owner, repo: name } });
+      }}
+    >
+      <Combobox.Trigger
+        aria-label="Switch repository"
+        className="flex min-w-0 items-center gap-1.5 rounded-[3px] px-2 py-1 font-mono text-sm text-ink hover:bg-sheet data-popup-open:bg-sheet"
+      >
+        <span className="truncate">{repo}</span>
+        <Chevron />
+      </Combobox.Trigger>
+      <Combobox.Portal>
+        <Combobox.Positioner sideOffset={6} align="start">
+          <Combobox.Popup
+            aria-label="Switch repository"
+            className="w-80 max-w-(--available-width) overflow-hidden rounded-[3px] border border-rule bg-sheet shadow-[0_8px_24px_-12px_rgb(0_0_0/0.35)]"
+          >
+            <Combobox.Input
+              placeholder="Find a repository"
+              className="w-full border-b border-rule bg-transparent px-3 py-2 font-mono text-sm outline-none placeholder:font-sans placeholder:text-muted"
+            />
+            <Combobox.Empty>
+              <p className="px-3 py-3 text-sm text-muted">No matches.</p>
+            </Combobox.Empty>
+            <Combobox.List className="max-h-[min(20rem,var(--available-height))] overflow-auto overscroll-contain p-1 empty:p-0">
+              {(name: string) => {
+                const [owner, short] = name.split("/");
+                return (
+                  <Combobox.Item
+                    key={name}
+                    value={name}
+                    className="flex cursor-default items-center justify-between gap-4 rounded-[2px] px-2.5 py-1.5 font-mono text-sm outline-none data-highlighted:bg-violet data-highlighted:text-on-violet"
+                  >
+                    <span className="truncate">
+                      <span className="opacity-60">{owner}/</span>
+                      {short}
+                    </span>
+                    {name === repo ? (
+                      <span className="font-sans text-xs">current</span>
+                    ) : null}
+                  </Combobox.Item>
+                );
+              }}
+            </Combobox.List>
+          </Combobox.Popup>
+        </Combobox.Positioner>
+      </Combobox.Portal>
+    </Combobox.Root>
   );
 }
 

@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 
+import { AppSkeleton } from "../components/skeleton.tsx";
 import { meQuery } from "../queries.ts";
 
 export const Route = createRootRouteWithContext<{
@@ -10,6 +11,7 @@ export const Route = createRootRouteWithContext<{
     me: await context.queryClient.ensureQueryData(meQuery),
   }),
   component: Outlet,
+  pendingComponent: AppSkeleton,
   errorComponent: function Failed({ error, reset }) {
     return (
       <main className="mx-auto max-w-xl px-5 pt-24">

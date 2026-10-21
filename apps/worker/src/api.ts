@@ -178,15 +178,15 @@ api.get("/repos/:owner/:repo", async (c) => {
   const { github, store, budgets } = services(c.env);
   const { repo, installation } = found;
   const client = github.repo(installation.id, repo);
-  const [source, labels, used] = await Promise.all([
+  const [file, labels, used] = await Promise.all([
     client.config(),
     client.labels(),
     store.usage(installation.id, budgetPeriod(new Date())),
   ]);
-  if (source === null) {
+  if (file === null) {
     return c.json({ status: "no config" } satisfies RepoStatus);
   }
-  const parsed = parseConfig(source);
+  const parsed = parseConfig(file.source);
   if (!parsed.ok) {
     return c.json({
       status: "invalid config",
@@ -197,7 +197,8 @@ api.get("/repos/:owner/:repo", async (c) => {
   const status: RepoStatus = {
     status: "ready",
     config: {
-      source,
+      path: file.path,
+      source: file.source,
       labels,
       groups: previewGroups(groups),
       warnings,

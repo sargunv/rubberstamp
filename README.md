@@ -10,7 +10,7 @@ repositories need to be on the allowlist.
 1. Install [Rubberstamp Bot](https://github.com/apps/rubberstamp-bot) on the
    repository.
 2. Give your labels clear descriptions on GitHub. Rubberstamp reads them.
-3. Add `.github/rubberstamp.yml` to the default branch.
+3. Add `.config/rubberstamp.yml` to the default branch.
 
 Rubberstamp reads the configuration only from the default branch, so a pull
 request can't change how it is judged.
@@ -18,7 +18,7 @@ request can't change how it is judged.
 ## Configuration
 
 ```yaml
-# .github/rubberstamp.yml
+# .config/rubberstamp.yml
 context: |
   What this repository is, for every judgment: its parts, and the conventions
   that hint at a change's subject, such as Conventional Commit titles.

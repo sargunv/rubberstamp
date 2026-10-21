@@ -67,9 +67,9 @@ async function mapLimited<T, U>(
  */
 export async function buildPreview(deps: BuildDeps): Promise<BuildResult> {
   const { repo } = deps;
-  const source = await repo.config();
-  if (source === null) return { ok: false, error: "No config file" };
-  const parsed = parseConfig(source);
+  const file = await repo.config();
+  if (file === null) return { ok: false, error: "No config file" };
+  const parsed = parseConfig(file.source);
   if (!parsed.ok) return { ok: false, error: parsed.errors.join("; ") };
   const { config } = parsed;
   if (!config.labels) return { ok: false, error: "Labeling is off" };
@@ -125,7 +125,7 @@ export async function buildPreview(deps: BuildDeps): Promise<BuildResult> {
       repo: repo.fullName,
       createdAt: (deps.now?.() ?? new Date()).toISOString(),
       model,
-      config: source,
+      config: file.source,
       labels,
       groups: previewGroups(groups),
       items,

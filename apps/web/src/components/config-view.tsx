@@ -74,12 +74,14 @@ function Context({ text }: { text: string }) {
 /** A repository's label groups, with what Jev reads about each label. */
 export function ConfigView({
   repo,
+  path,
   source,
   groups,
   colors,
   warnings,
 }: {
   repo: string;
+  path: string;
   source: string;
   groups: Group[];
   colors: Map<string, string>;
@@ -97,10 +99,10 @@ export function ConfigView({
       >
         Config{" "}
         <a
-          href={`https://github.com/${repo}/blob/HEAD/.github/rubberstamp.yml`}
+          href={`https://github.com/${repo}/blob/HEAD/${path}`}
           className="ml-1 rounded-[2px] font-mono text-xs font-normal text-muted hover:text-ink hover:underline"
         >
-          .github/rubberstamp.yml
+          {path}
         </a>
       </h2>
 

@@ -9,6 +9,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { ApiError } from "./api.ts";
+import { LedgerSkeleton } from "./components/skeleton.tsx";
 import { meQuery } from "./queries.ts";
 import { routeTree } from "./routeTree.gen.ts";
 
@@ -38,9 +39,7 @@ const router = createRouter({
   defaultPreload: "intent",
   defaultPreloadStaleTime: 0,
   defaultPendingMs: 150,
-  defaultPendingComponent: () => (
-    <p className="px-5 pt-10 text-sm text-muted sm:px-8">Loading…</p>
-  ),
+  defaultPendingComponent: LedgerSkeleton,
   scrollRestoration: true,
 });
 

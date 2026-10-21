@@ -1,7 +1,14 @@
 import * as v from "valibot";
 import { parse as parseYaml } from "yaml";
 
-export const CONFIG_PATH = ".github/rubberstamp.yml";
+/** Where a repository keeps its Rubberstamp config. */
+export const CONFIG_PATH = ".config/rubberstamp.yml";
+
+/**
+ * Also read, after CONFIG_PATH, for repositories that adopted Rubberstamp
+ * before it moved. Not documented anywhere users see.
+ */
+export const LEGACY_CONFIG_PATH = ".github/rubberstamp.yml";
 
 const Text = v.pipe(v.string(), v.trim(), v.nonEmpty());
 const Threshold = v.pipe(v.number(), v.minValue(0), v.maxValue(1));

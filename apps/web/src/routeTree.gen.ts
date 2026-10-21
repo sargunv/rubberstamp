@@ -12,7 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OwnerRepoRouteRouteImport } from './routes/$owner/$repo/route'
 import { Route as OwnerRepoIndexRouteImport } from './routes/$owner/$repo/index'
-import { Route as OwnerRepoConfigRouteImport } from './routes/$owner/$repo/config'
+import { Route as OwnerRepoLogRouteImport } from './routes/$owner/$repo/log'
 import { Route as OwnerRepoPreviewRouteImport } from './routes/$owner/$repo/preview'
 
 const IndexRoute = IndexRouteImport.update({
@@ -30,9 +30,9 @@ const OwnerRepoIndexRoute = OwnerRepoIndexRouteImport.update({
   path: '/',
   getParentRoute: () => OwnerRepoRouteRoute,
 } as any)
-const OwnerRepoConfigRoute = OwnerRepoConfigRouteImport.update({
-  id: '/config',
-  path: '/config',
+const OwnerRepoLogRoute = OwnerRepoLogRouteImport.update({
+  id: '/log',
+  path: '/log',
   getParentRoute: () => OwnerRepoRouteRoute,
 } as any)
 const OwnerRepoPreviewRoute = OwnerRepoPreviewRouteImport.update({
@@ -44,13 +44,13 @@ const OwnerRepoPreviewRoute = OwnerRepoPreviewRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$owner/$repo': typeof OwnerRepoRouteRouteWithChildren
-  '/$owner/$repo/config': typeof OwnerRepoConfigRoute
+  '/$owner/$repo/log': typeof OwnerRepoLogRoute
   '/$owner/$repo/preview': typeof OwnerRepoPreviewRoute
   '/$owner/$repo/': typeof OwnerRepoIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/$owner/$repo/config': typeof OwnerRepoConfigRoute
+  '/$owner/$repo/log': typeof OwnerRepoLogRoute
   '/$owner/$repo/preview': typeof OwnerRepoPreviewRoute
   '/$owner/$repo': typeof OwnerRepoIndexRoute
 }
@@ -58,7 +58,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$owner/$repo': typeof OwnerRepoRouteRouteWithChildren
-  '/$owner/$repo/config': typeof OwnerRepoConfigRoute
+  '/$owner/$repo/log': typeof OwnerRepoLogRoute
   '/$owner/$repo/preview': typeof OwnerRepoPreviewRoute
   '/$owner/$repo/': typeof OwnerRepoIndexRoute
 }
@@ -67,16 +67,16 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$owner/$repo'
-    | '/$owner/$repo/config'
+    | '/$owner/$repo/log'
     | '/$owner/$repo/preview'
     | '/$owner/$repo/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$owner/$repo/config' | '/$owner/$repo/preview' | '/$owner/$repo'
+  to: '/' | '/$owner/$repo/log' | '/$owner/$repo/preview' | '/$owner/$repo'
   id:
     | '__root__'
     | '/'
     | '/$owner/$repo'
-    | '/$owner/$repo/config'
+    | '/$owner/$repo/log'
     | '/$owner/$repo/preview'
     | '/$owner/$repo/'
   fileRoutesById: FileRoutesById
@@ -109,11 +109,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OwnerRepoIndexRouteImport
       parentRoute: typeof OwnerRepoRouteRoute
     }
-    '/$owner/$repo/config': {
-      id: '/$owner/$repo/config'
-      path: '/config'
-      fullPath: '/$owner/$repo/config'
-      preLoaderRoute: typeof OwnerRepoConfigRouteImport
+    '/$owner/$repo/log': {
+      id: '/$owner/$repo/log'
+      path: '/log'
+      fullPath: '/$owner/$repo/log'
+      preLoaderRoute: typeof OwnerRepoLogRouteImport
       parentRoute: typeof OwnerRepoRouteRoute
     }
     '/$owner/$repo/preview': {
@@ -127,13 +127,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface OwnerRepoRouteRouteChildren {
-  OwnerRepoConfigRoute: typeof OwnerRepoConfigRoute
+  OwnerRepoLogRoute: typeof OwnerRepoLogRoute
   OwnerRepoPreviewRoute: typeof OwnerRepoPreviewRoute
   OwnerRepoIndexRoute: typeof OwnerRepoIndexRoute
 }
 
 const OwnerRepoRouteRouteChildren: OwnerRepoRouteRouteChildren = {
-  OwnerRepoConfigRoute: OwnerRepoConfigRoute,
+  OwnerRepoLogRoute: OwnerRepoLogRoute,
   OwnerRepoPreviewRoute: OwnerRepoPreviewRoute,
   OwnerRepoIndexRoute: OwnerRepoIndexRoute,
 }
