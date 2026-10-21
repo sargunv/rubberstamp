@@ -11,7 +11,7 @@ packages/core   pure TS shared by the worker and the web UI: config schema,
                 question building, decisions, state description, Jev client
 apps/worker     Cloudflare Worker: GitHub webhooks, queue consumer, jobs,
                 D1 store (migrations/), R2 state snapshots
-docs/design.md  the product design and the decisions behind it
+README.md       what Rubberstamp does and the configuration reference
 ```
 
 ## Dev tool commands
@@ -33,6 +33,9 @@ docs/design.md  the product design and the decisions behind it
 Secrets live age-encrypted in `fnox.toml`. Read one with `fnox get NAME`, and
 add or replace one with `fnox set NAME` (it reads stdin or prompts). Never print
 a secret's value.
+
+Planned work lives in GitHub issues on `sargunv/rubberstamp`. Rubberstamp labels
+them itself from `.github/rubberstamp.yml`, so don't label by hand.
 
 ## Project invariants
 

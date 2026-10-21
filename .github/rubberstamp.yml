@@ -1,0 +1,21 @@
+context: |
+  Rubberstamp is a GitHub App on Cloudflare Workers that uses TypeSafe's Jev
+  model to label new issues and pull requests, and later to select which CI to
+  run. packages/core holds the pure logic shared by the Worker and the planned
+  web UI: the config schema, question building, and decisions. apps/worker holds
+  the Worker: webhooks, the queue consumer, jobs, and the D1 and R2 store. Pull
+  request titles are Conventional Commits. Their type usually names the kind of
+  work: fix is a bug, feat a feature, perf a perf change, and test, refactor,
+  build, ci, docs, and chore are chores.
+
+labels:
+  groups:
+    kind:
+      labels: [bug, feature, perf, chore, research]
+      min: 1
+      max: 1
+    area:
+      labels: ["area:*"]
+      min: 1
+    accessibility:
+      labels: [accessibility]
