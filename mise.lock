@@ -190,49 +190,6 @@ url = "https://github.com/jdx/fnox/releases/download/v1.40.0/fnox-x86_64-pc-wind
 url_api = "https://api.github.com/repos/jdx/fnox/releases/assets/647629411"
 provenance = "github-attestations"
 
-[[tools."github:rwx-cloud/rwx"]]
-version = "3.36.1"
-backend = "github:rwx-cloud/rwx"
-specifiers = [
-    "3.36.1",
-    "latest",
-]
-
-[tools."github:rwx-cloud/rwx"."platforms.linux-arm64"]
-checksum = "sha256:52b6877cb955f7ae4e3f4e8ff93751074637dddaaae43217c6f6a22a28f7a114"
-url = "https://github.com/rwx-cloud/rwx/releases/download/v3.36.1/rwx-linux-aarch64"
-url_api = "https://api.github.com/repos/rwx-cloud/rwx/releases/assets/648047713"
-
-[tools."github:rwx-cloud/rwx"."platforms.linux-arm64-musl"]
-checksum = "sha256:52b6877cb955f7ae4e3f4e8ff93751074637dddaaae43217c6f6a22a28f7a114"
-url = "https://github.com/rwx-cloud/rwx/releases/download/v3.36.1/rwx-linux-aarch64"
-url_api = "https://api.github.com/repos/rwx-cloud/rwx/releases/assets/648047713"
-
-[tools."github:rwx-cloud/rwx"."platforms.linux-x64"]
-checksum = "sha256:8a88c69fe325d0f56cb21b61768969b6d20b13a87ce751c1b6a5ac0b50b36b62"
-url = "https://github.com/rwx-cloud/rwx/releases/download/v3.36.1/rwx-linux-x86_64"
-url_api = "https://api.github.com/repos/rwx-cloud/rwx/releases/assets/648047285"
-
-[tools."github:rwx-cloud/rwx"."platforms.linux-x64-musl"]
-checksum = "sha256:8a88c69fe325d0f56cb21b61768969b6d20b13a87ce751c1b6a5ac0b50b36b62"
-url = "https://github.com/rwx-cloud/rwx/releases/download/v3.36.1/rwx-linux-x86_64"
-url_api = "https://api.github.com/repos/rwx-cloud/rwx/releases/assets/648047285"
-
-[tools."github:rwx-cloud/rwx"."platforms.macos-arm64"]
-checksum = "sha256:6e9c6d2981d896599a15291432984d7679c275614e366612968aa4910d9ce862"
-url = "https://github.com/rwx-cloud/rwx/releases/download/v3.36.1/rwx-darwin-aarch64"
-url_api = "https://api.github.com/repos/rwx-cloud/rwx/releases/assets/648049330"
-
-[tools."github:rwx-cloud/rwx"."platforms.macos-x64"]
-checksum = "sha256:928b08e613224584cc0635069ebe1a0c559c92effa7703cacd8222d6da53fe02"
-url = "https://github.com/rwx-cloud/rwx/releases/download/v3.36.1/rwx-darwin-x86_64"
-url_api = "https://api.github.com/repos/rwx-cloud/rwx/releases/assets/648048934"
-
-[tools."github:rwx-cloud/rwx"."platforms.windows-x64"]
-checksum = "sha256:18f40ce41b2cc74641f39f2458a15d29e4edb38503a0b837338e7f5b5a4fb628"
-url = "https://github.com/rwx-cloud/rwx/releases/download/v3.36.1/rwx-windows-x86_64.exe"
-url_api = "https://api.github.com/repos/rwx-cloud/rwx/releases/assets/648048142"
-
 [[tools.node]]
 version = "24.22.0"
 backend = "core:node"
