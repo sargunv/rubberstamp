@@ -31,13 +31,38 @@ const LabelsSection = v.strictObject({
   describe: v.optional(v.record(Text, Text), {}),
 });
 
+// Workflows gate jobs on unit ids with GitHub's `contains`, which ignores case,
+// so ids are lowercase to keep two of them from matching the same job.
+const UnitId = v.pipe(
+  v.string(),
+  v.regex(
+    /^[a-z0-9][a-z0-9._-]*$/,
+    "unit ids use lowercase letters, digits, '.', '_', and '-'",
+  ),
+);
+
+const CiUnit = v.strictObject({
+  covers: Text,
+  paths: v.optional(v.array(Text), []),
+});
+
+const CiSection = v.strictObject({
+  context: v.optional(Text),
+  units: v.pipe(
+    v.record(UnitId, CiUnit),
+    v.check((units) => Object.keys(units).length > 0, "name at least one unit"),
+  ),
+});
+
 export const Config = v.strictObject({
   context: v.optional(Text),
   labels: v.optional(LabelsSection),
+  ci: v.optional(CiSection),
 });
 
 export type Config = v.InferOutput<typeof Config>;
 export type LabelGroupConfig = v.InferOutput<typeof LabelGroup>;
+export type CiUnitConfig = v.InferOutput<typeof CiUnit>;
 
 export type ConfigResult =
   | { ok: true; config: Config }
