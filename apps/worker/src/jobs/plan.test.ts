@@ -139,6 +139,23 @@ describe("runPlanJob", () => {
     expect(store.plans).toEqual([]);
   });
 
+  it("doesn't save a plan for a head a push replaced while Jev judged", async () => {
+    const repo = new FakeRepo(CONFIG, pull);
+    const store = new FakeStore();
+    const outcome = await runPlanJob(
+      job,
+      deps(repo, store, {
+        ask: async (request) => {
+          repo.head = "def456";
+          return jev([])(request);
+        },
+      }),
+    );
+    expect(outcome).toMatchObject({ reason: "superseded" });
+    expect(store.plans).toEqual([]);
+    expect(store.usageKinds).toEqual(["ci"]);
+  });
+
   it("plans again when the pull request is retargeted at the same head", async () => {
     const store = new FakeStore();
     const repo = new FakeRepo(CONFIG, pull);

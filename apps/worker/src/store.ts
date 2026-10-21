@@ -309,17 +309,17 @@ export class CloudflareStore implements Store {
    * The repository's most recently acted-on issues and pull requests, each
    * with its latest label run and latest plan, most recent first.
    */
-  async recentActivity(repo: string, limit: number): Promise<ActivityItem[]> {
+  async recentActivity(repoId: number, limit: number): Promise<ActivityItem[]> {
     const { results } = await this.db
       .prepare(
         `WITH runs AS (
-           SELECT * FROM label_runs l WHERE repo = ?1 AND id = (
+           SELECT * FROM label_runs l WHERE repo_id = ?1 AND id = (
              SELECT MAX(id) FROM label_runs
              WHERE repo_id = l.repo_id AND number = l.number
            )
          ),
          plans AS (
-           SELECT * FROM ci_plans p WHERE repo = ?1 AND id = (
+           SELECT * FROM ci_plans p WHERE repo_id = ?1 AND id = (
              SELECT MAX(id) FROM ci_plans
              WHERE repo_id = p.repo_id AND number = p.number
            )
@@ -343,7 +343,7 @@ export class CloudflareStore implements Store {
          LEFT JOIN plans p ON p.number = i.number
          ORDER BY i.at DESC`,
       )
-      .bind(repo, limit)
+      .bind(repoId, limit)
       .all();
     return results.map(activityItem);
   }

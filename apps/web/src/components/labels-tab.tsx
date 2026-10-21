@@ -26,9 +26,10 @@ export function LabelsTab({
   groups: Group[];
   colors: Map<string, string>;
   warnings: string[];
-  preview: Omit<ComponentProps<typeof PreviewTab>, "repo">;
+  /** Null when labels aren't configured, since there's nothing to preview. */
+  preview: Omit<ComponentProps<typeof PreviewTab>, "repo"> | null;
 }) {
-  if (!config.labels) {
+  if (!config.labels || !preview) {
     return (
       <Unconfigured
         example={`labels:
