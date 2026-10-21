@@ -104,8 +104,8 @@ export type Claim = {
   key: string;
 };
 
-// The longest a queue consumer can run, after which its claim lapses.
-const CLAIM_MINUTES = 15;
+/** The longest a queue consumer can run, after which its claim lapses. */
+export const CLAIM_MINUTES = 15;
 
 /** What spent Jev usage, within the same allowance. */
 export type UsageKind = "labels" | "ci";

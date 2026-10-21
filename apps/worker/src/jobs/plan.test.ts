@@ -179,7 +179,7 @@ describe("runPlanJob", () => {
         job,
         deps(new FakeRepo(CONFIG, pull), store, { ask: jev(requests) }),
       ),
-    ).toMatchObject({ reason: "in progress" });
+    ).toEqual({ status: "busy" });
     expect(requests).toEqual([]);
   });
 

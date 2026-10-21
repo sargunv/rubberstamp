@@ -34,6 +34,8 @@ export type PlanDeps = LabelDeps;
 
 export type PlanOutcome =
   | { status: "skipped"; reason: string; warnings?: string[] }
+  /** Another job holds the claim; try again once it lapses. */
+  | { status: "busy" }
   | { status: "planned"; decisions: UnitDecision[] };
 
 type Judged = {
@@ -105,7 +107,7 @@ export async function runPlanJob(
       return { status: "planned", decisions: judged.decisions };
     },
   );
-  return outcome ?? { status: "skipped", reason: "in progress" };
+  return outcome ?? { status: "busy" };
 }
 
 /** Ask Jev about the change, or plan every unit when it can't or shouldn't. */

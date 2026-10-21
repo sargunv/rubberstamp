@@ -78,7 +78,7 @@ describe("runLabelJob", () => {
     await busy.claim(claim);
     const requests: Request[] = [];
     expect(await runLabelJob(job, options(busy, jev(requests)))).toMatchObject({
-      reason: "in progress",
+      status: "busy",
     });
     expect(requests).toEqual([]);
 

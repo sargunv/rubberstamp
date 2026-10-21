@@ -35,6 +35,8 @@ export type LabelDeps = {
 
 export type LabelOutcome =
   | { status: "skipped"; reason: string; warnings?: string[] }
+  /** Another job holds the claim; try again once it lapses. */
+  | { status: "busy" }
   | {
       status: "labeled";
       added: string[];
@@ -124,5 +126,5 @@ export async function runLabelJob(
       return { status: "labeled", added, decisions, warnings };
     },
   );
-  return outcome ?? { status: "skipped", reason: "in progress", warnings };
+  return outcome ?? { status: "busy" };
 }

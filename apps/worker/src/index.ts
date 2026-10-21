@@ -7,7 +7,7 @@ import { verifyWebhook } from "./github/auth.ts";
 import { runLabelJob } from "./jobs/label.ts";
 import { runPlanJob } from "./jobs/plan.ts";
 import { services } from "./services.ts";
-import { CloudflareStore } from "./store.ts";
+import { CLAIM_MINUTES, CloudflareStore } from "./store.ts";
 import { webhookEffects } from "./webhooks.ts";
 
 export { RepoPreviews } from "./preview/object.ts";
@@ -95,7 +95,13 @@ export default {
           `${job.output.type} ${job.output.repo}#${job.output.number}`,
           outcome,
         );
-        message.ack();
+        // The job holding the claim may have died with it, so look again once
+        // the claim lapses: by then the work is saved, or this job can claim it.
+        if (outcome.status === "busy") {
+          message.retry({ delaySeconds: CLAIM_MINUTES * 60 });
+        } else {
+          message.ack();
+        }
       } catch (error) {
         console.error(`${job.output.repo}#${job.output.number}`, error);
         message.retry({ delaySeconds: 30 * message.attempts });
