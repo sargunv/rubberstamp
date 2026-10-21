@@ -104,8 +104,9 @@ async function runAsked(
       run !== null &&
       run.repository.id === repoId &&
       run.event === "pull_request" &&
-      // GitHub can suffix the ref the file came from, as in `ci.yml@main`.
-      run.path.split("@")[0] === workflow &&
+      // GitHub can suffix the ref the file came from, as in `ci.yml@main`,
+      // and a file's own name can hold an @.
+      (run.path === workflow || run.path.startsWith(`${workflow}@`)) &&
       run.head_sha.toLowerCase() === query.sha &&
       now.getTime() - Date.parse(run.created_at) <= MAX_RUN_AGE_MS
     );

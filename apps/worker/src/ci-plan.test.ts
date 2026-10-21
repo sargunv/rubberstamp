@@ -312,6 +312,26 @@ describe("ciPlan", () => {
       },
     );
 
+    it.each([
+      [".github/workflows/ci@prod.yml", true],
+      [".github/workflows/ci@prod.yml@main", true],
+      [".github/workflows/ci", false],
+      [".github/workflows/ci@prod.yml.bak", false],
+    ])(
+      "for a workflow named with an @, from a run of %s: %s",
+      async (path, recorded) => {
+        const source = CONFIG.replace("ci.yml", "ci@prod.yml");
+        const { deps, repo, save, store } = setup({ source });
+        ranOn(repo, { path });
+        await save(HEAD, judged, source);
+
+        await ciPlan(query(run), null, deps);
+        expect([...store.ciRuns.values()].map((r) => r.workflow)).toEqual(
+          recorded ? [".github/workflows/ci@prod.yml"] : [],
+        );
+      },
+    );
+
     it("as every configured unit when every unit runs", async () => {
       const { deps, repo, save, store } = setup();
       ranOn(repo);
