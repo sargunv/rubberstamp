@@ -29,3 +29,26 @@ jobs:
           version: 2026.10.15
       - run: pnpm install --frozen-lockfile
       - run: mise run verify
+
+  # Runs one at a time with the rest of main's CI, so deploys land in push order.
+  deploy:
+    name: deploy
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7 # v5.2.0
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          version: 2026.10.15
+      - run: pnpm install --frozen-lockfile
+      # Secrets reach only this step, not the install's package scripts.
+      - run: mise run deploy
+        env:
+          FNOX_AGE_KEY: ${{ secrets.FNOX_AGE_KEY }}

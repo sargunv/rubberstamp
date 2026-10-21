@@ -31,8 +31,10 @@ README.md       a short introduction for people discovering the project
   Objects, and Queues. It writes `apps/worker/.dev.vars` (gitignored) from fnox
   each run.
 - `mise run deploy`: create missing queues, migrate D1, and deploy the Worker
-  with its secrets from fnox. Wrangler creates the D1 database itself and finds
-  it by name afterward.
+  with its secrets from fnox, using the Cloudflare token there too. Wrangler
+  creates the D1 database itself and finds it by name afterward. CI runs this on
+  every push to main after verify passes, so deploy by hand only to ship
+  something main doesn't have.
 - `mise run worker:types`: regenerate binding types after editing
   `apps/worker/wrangler.jsonc`.
 
@@ -40,7 +42,10 @@ README.md       a short introduction for people discovering the project
 
 Secrets live age-encrypted in `fnox.toml`. Read one with `fnox get NAME`, and
 add or replace one with `fnox set NAME` (it reads stdin or prompts). Never print
-a secret's value.
+a secret's value. Secrets marked `env = false`, such as the Cloudflare token,
+stay out of the Worker. They're encrypted to you and to CI's deploy key, whose
+private half is the `FNOX_AGE_KEY` secret in the repository's `production`
+environment.
 
 Planned work lives in GitHub issues on `sargunv/rubberstamp`. Rubberstamp labels
 them itself from `.config/rubberstamp.yml`, so don't label by hand.

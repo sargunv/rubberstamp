@@ -63,11 +63,13 @@ description = "Run the Worker and the web app together. Open http://localhost:51
 depends = ["worker:dev", "web:dev"]
 
 [tasks.deploy]
-description = "Build the web app, create missing queues, migrate D1, and deploy the Worker with its secrets from fnox."
+description = "Build the web app, create missing queues, migrate D1, and deploy the Worker with its secrets and Cloudflare token from fnox."
 dir = "apps/worker"
 shell = "bash -c"
 run = '''
 set -euo pipefail
+CLOUDFLARE_API_TOKEN="$(fnox get CLOUDFLARE_API_TOKEN)"
+export CLOUDFLARE_API_TOKEN
 (cd ../web && pnpm exec vp build)
 for queue in rubberstamp-jobs rubberstamp-jobs-dlq; do
   pnpm exec wrangler queues info "$queue" > /dev/null 2>&1 ||
