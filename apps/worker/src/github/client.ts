@@ -89,7 +89,13 @@ const Pull = v.object({
 
 export type Pull = v.InferOutput<typeof Pull>;
 
-const Comparison = v.object({ files: v.optional(v.array(File), []) });
+const Compared = v.object({
+  merge_base_commit: v.object({ sha: v.string() }),
+  files: v.optional(v.array(File), []),
+});
+
+/** What `head` changes since its merge base with `base`, and that commit. */
+export type Comparison = { mergeBase: string; files: PullFile[] };
 
 const Repository = v.object({
   id: v.number(),
@@ -149,10 +155,10 @@ export interface RepoApi {
   /** A pull request's changed files, up to the first thousand. */
   pullFiles(number: number): Promise<PullFile[]>;
   /**
-   * The files `head` changes since its merge base with `base`, up to the
-   * first 300, or null if either commit is gone.
+   * The merge base of `base` and `head`, and the files `head` changes since
+   * it, up to the first 300, or null if either commit is gone.
    */
-  compare(base: string, head: string): Promise<PullFile[] | null>;
+  compare(base: string, head: string): Promise<Comparison | null>;
   addLabels(number: number, labels: string[]): Promise<void>;
   /** A GitHub Actions workflow run, or null if the repository has none. */
   workflowRun(runId: number): Promise<WorkflowRun | null>;
@@ -358,7 +364,7 @@ class RepoClient implements RepoApi {
     );
   }
 
-  async compare(base: string, head: string): Promise<PullFile[] | null> {
+  async compare(base: string, head: string): Promise<Comparison | null> {
     // Three dots diff from the merge base, as a pull request's files do.
     const path = `/repos/${this.fullName}/compare/${base}...${head}`;
     const response = await this.send("GET", path);
@@ -366,7 +372,8 @@ class RepoClient implements RepoApi {
     if (!response.ok) {
       throw new GitHubError(response.status, path, await response.text());
     }
-    return v.parse(Comparison, await response.json()).files;
+    const compared = v.parse(Compared, await response.json());
+    return { mergeBase: compared.merge_base_commit.sha, files: compared.files };
   }
 
   async addLabels(number: number, labels: string[]): Promise<void> {

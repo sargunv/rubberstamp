@@ -431,29 +431,75 @@ describe("runPlanJob since a unit last passed", () => {
     expect(store.plans[0]).toMatchObject({ model: null, inputTokens: 0 });
   });
 
-  it("finds no changes after a rebase that only moved the patch", async () => {
-    const { repo, requests, run } = setup([MAP], both(OLD, OLD_BASE));
-    repo.comparisons.set(`${OLD_BASE}...${OLD}`, [
-      file("src/map.cpp", "@@ -40,3 +40,3 @@ int main() {\n ctx\n-a\n+b\n ctx"),
-    ]);
-    expect(await run()).toMatchObject({
+  const unchangedSince = (since: string) => {
+    const rule = `no changes since ${since.slice(0, 7)}`;
+    return {
       decisions: [
-        {
-          run: false,
-          score: null,
-          rule: "no changes since 0ld0ld0",
-          since: OLD,
-        },
-        {
-          run: false,
-          score: null,
-          rule: "no changes since 0ld0ld0",
-          since: OLD,
-        },
+        { run: false, score: null, rule, since },
+        { run: false, score: null, rule, since },
       ],
-    });
-    expect(repo.compared).toEqual([`${OLD_BASE}...${OLD}`]);
+    };
+  };
+
+  it("finds no changes after a force push that rewrote commits in place", async () => {
+    const { repo, requests, run } = setup([MAP], both(OLD, OLD_BASE));
+    repo.comparisons.set(`${OLD_BASE}...${OLD}`, [MAP]);
+    expect(await run()).toMatchObject(unchangedSince(OLD));
+    expect(repo.compared).toEqual(["base123...abc123", `${OLD_BASE}...${OLD}`]);
     expect(requests).toEqual([]);
+  });
+
+  it("finds no changes when only main advanced", async () => {
+    // The head passed against an older main; the branch hasn't moved since.
+    const { repo, requests, run } = setup([MAP], both("abc123", OLD_BASE));
+    repo.comparisons.set(`${OLD_BASE}...abc123`, [MAP]);
+    expect(await run()).toMatchObject(unchangedSince("abc123"));
+    expect(requests).toEqual([]);
+  });
+
+  it.each([
+    [
+      "a rebase onto a newer base",
+      file("src/map.cpp", "@@ -40,3 +40,3 @@ int main() {\n ctx\n-a\n+b\n ctx"),
+    ],
+    ["a merge of main into the branch", MAP],
+  ])(
+    "judges the whole change after %s, even with the same patch",
+    async (_, then) => {
+      const { repo, requests, run } = setup([MAP], both(OLD, OLD_BASE));
+      repo.comparisons.set(`${OLD_BASE}...${OLD}`, [then]);
+      // The branch now forks from a later main commit than when it passed.
+      repo.mergeBases.set(`${OLD_BASE}...${OLD}`, "oldfork");
+      expect(await run()).toEqual({
+        status: "planned",
+        decisions: [
+          {
+            unit: "linux-x64",
+            threshold: 0.5,
+            run: true,
+            score: 0.9,
+            rule: "",
+          },
+          { unit: "macos", threshold: 0.5, run: false, score: 0.2, rule: "" },
+        ],
+      });
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.state).not.toHaveProperty("change.scope");
+    },
+  );
+
+  it("judges the whole change when the pull request's own compare fails", async () => {
+    const { repo, requests, run } = setup([MAP], both(OLD, OLD_BASE));
+    repo.comparisons.set(`${OLD_BASE}...${OLD}`, [MAP]);
+    const compare = repo.compare;
+    repo.compare = async (base, head) => {
+      if (head === "abc123") throw new Error("GitHub 502");
+      return compare(base, head);
+    };
+    expect(await run()).toMatchObject({
+      decisions: [{ score: 0.9 }, { score: 0.2 }],
+    });
+    expect(requests[0]?.state).not.toHaveProperty("change.scope");
   });
 
   it("judges only the files edited since the pass", async () => {

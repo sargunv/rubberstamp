@@ -110,12 +110,26 @@ export class FakeRepo implements RepoApi {
     changed_files: this.files.length,
   });
   pullFiles = async () => this.files;
-  /** What each `base...head` comparison lists; any other is gone. */
+  /**
+   * What each `base...head` comparison lists besides the pull request's own,
+   * which lists its files; any other is gone.
+   */
   comparisons = new Map<string, PullFile[]>();
+  /** Each comparison's merge base, where it isn't `mergeBase`. */
+  mergeBases = new Map<string, string>();
+  /** Where the branch forked from its base, unless a comparison says not. */
+  mergeBase = "fork123";
   compared: string[] = [];
   compare = async (base: string, head: string) => {
-    this.compared.push(`${base}...${head}`);
-    return this.comparisons.get(`${base}...${head}`) ?? null;
+    const key = `${base}...${head}`;
+    this.compared.push(key);
+    const files =
+      key === `${this.baseSha}...${this.head}`
+        ? this.files
+        : this.comparisons.get(key);
+    return files === undefined
+      ? null
+      : { mergeBase: this.mergeBases.get(key) ?? this.mergeBase, files };
   };
   recentItems = async (count: number) => this.recent.slice(0, count);
   addLabels = async (_: number, labels: string[]) => {

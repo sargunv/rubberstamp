@@ -17,7 +17,7 @@ import {
 } from "@sargunv/rubberstamp-core";
 
 import { budgetPeriod, budgetSpent } from "../budget.ts";
-import type { Pull } from "../github/client.ts";
+import type { Comparison, Pull } from "../github/client.ts";
 import type { PlanKey, UnitPass } from "../store.ts";
 import { claimed } from "./claim.ts";
 import type { LabelDeps } from "./label.ts";
@@ -257,9 +257,17 @@ async function sincePasses(
     }
   }
 
+  // A group is judged only on what changed since its pass when its merge base
+  // is where it was then. Main advancing leaves it there, and main's own runs
+  // cover main's code. A rebase or a merge of the base branch moves it, and
+  // the pull request's code now runs on base code no unit passed with, so the
+  // group is judged on the whole change like a unit that never passed.
+  const now =
+    groups.size === 0 ? null : await mergeBaseNow(job, deps, pull, files);
   const since: Judgment[] = [];
   for (const { pass, units: grouped } of groups.values()) {
-    const changed = await changedSincePass(job, deps, pass, pull, files);
+    const changed =
+      now === null ? null : await changedSincePass(job, deps, pass, now, files);
     if (changed === null) {
       for (const unit of grouped) whole.add(unit);
     } else if (changed.length === 0) {
@@ -275,6 +283,37 @@ async function sincePasses(
   return all.length === 0 ? since : [{ units: all, files }, ...since];
 }
 
+/** A comparison, or null when it fails or either commit is gone. */
+async function compared(
+  job: PlanJob,
+  deps: PlanDeps,
+  base: string,
+  head: string,
+): Promise<Comparison | null> {
+  try {
+    return await deps.repo.compare(base, head);
+  } catch (error) {
+    console.error(`${job.repo}#${job.number} compare failed`, error);
+    return null;
+  }
+}
+
+/**
+ * The pull request's merge base now, or null when no pass can be compared
+ * with it and every unit needs the whole change judged.
+ */
+async function mergeBaseNow(
+  job: PlanJob,
+  deps: PlanDeps,
+  pull: Pull,
+  files: PullFile[],
+): Promise<string | null> {
+  // A file missing from the pull request's list could hide a change.
+  if (files.length < pull.changed_files) return null;
+  const now = await compared(job, deps, pull.base.sha, pull.head.sha);
+  return now?.mergeBase ?? null;
+}
+
 /**
  * The files whose changes differ from when a unit passed, or null when the
  * comparison can't be trusted and the whole change needs judging.
@@ -283,19 +322,17 @@ async function changedSincePass(
   job: PlanJob,
   deps: PlanDeps,
   pass: UnitPass,
-  pull: Pull,
+  mergeBase: string,
   files: PullFile[],
 ): Promise<PullFile[] | null> {
-  // A file missing from either list could hide a change.
-  if (files.length < pull.changed_files) return null;
-  let then: PullFile[] | null;
-  try {
-    then = await deps.repo.compare(pass.base, pass.head);
-  } catch (error) {
-    console.error(`${job.repo}#${job.number} compare failed`, error);
+  // GitHub can collect a head a force push left unreachable.
+  const then = await compared(job, deps, pass.base, pass.head);
+  if (
+    then === null ||
+    then.mergeBase !== mergeBase ||
+    then.files.length >= COMPARE_FILE_LIMIT
+  ) {
     return null;
   }
-  // GitHub can collect a head a force push left unreachable.
-  if (then === null || then.length >= COMPARE_FILE_LIMIT) return null;
-  return changedSince(files, then);
+  return changedSince(files, then.files);
 }
