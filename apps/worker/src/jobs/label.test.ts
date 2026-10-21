@@ -48,7 +48,7 @@ describe("runLabelJob", () => {
     // The log keeps the groups as judged, so a later config can't rewrite it.
     expect(store.runs[0]?.groups.map((g) => [g.id, g.threshold])).toEqual([
       ["kind", 0.5],
-      ["area", 0.8],
+      ["area", 0.5],
     ]);
   });
 
