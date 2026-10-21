@@ -96,7 +96,7 @@ describe("resolveLabels", () => {
 
   it("defaults thresholds by question type", () => {
     const { groups } = resolveLabels(config(), REPO_LABELS);
-    expect(groups.map((g) => g.threshold)).toEqual([0.5, 0.8, 0.7]);
+    expect(groups.map((g) => g.threshold)).toEqual([0.5, 0.5, 0.7]);
   });
 
   it("warns about missing labels, duplicates, and stray descriptions", () => {
@@ -185,7 +185,7 @@ describe("question type", () => {
       config("labels:\n  groups:\n    up: { max: 1, labels: [bug] }\n"),
       REPO_LABELS,
     );
-    expect(groups[0]).toMatchObject({ choice: false, threshold: 0.8 });
+    expect(groups[0]).toMatchObject({ choice: false, threshold: 0.5 });
   });
 });
 
@@ -197,7 +197,7 @@ describe("decideLabels", () => {
       choice: "bug",
       probabilities: { bug: 0.7, feature: 0.2, chore: 0.1 },
     },
-    "label:area:map": { type: "noul", noul: 0.6 },
+    "label:area:map": { type: "noul", noul: 0.45 },
     "label:area:render": { type: "noul", noul: 0.3 },
     "label:Area:Docs": { type: "noul", noul: 0.1 },
     "label:binding:kotlin": { type: "noul", noul: 0.75 },
@@ -257,7 +257,7 @@ labels:
   });
 
   it("applies threshold overrides per group", () => {
-    expect(added([], { kind: 0.8, area: 0.5, binding: 0.9 })).toEqual([
+    expect(added([], { kind: 0.8, area: 0.4, binding: 0.9 })).toEqual([
       "bug (filled to min)",
       "area:map",
     ]);

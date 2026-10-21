@@ -20,9 +20,10 @@ export type ResolvedGroup = {
 
 export type Resolution = { groups: ResolvedGroup[]; warnings: string[] };
 
-// A Choice's probabilities compete, so 0.5 already means "more likely than
-// every other option combined". Nouls are independent.
-const DEFAULT_THRESHOLD = { choice: 0.5, noul: 0.8 };
+// A Choice's probabilities compete, so 0.5 means "more likely than every other
+// option combined". A Noul is independent, so 0.5 means "more likely than
+// not"; demanding more left out labels that fit in practice.
+const DEFAULT_THRESHOLD = { choice: 0.5, noul: 0.5 };
 export const NONE = "none of these";
 
 /** Match the configured groups against the labels that exist on the repo. */
