@@ -6,6 +6,7 @@ import { recordPasses } from "./unit-passes.ts";
 
 const HEAD = "a".repeat(40);
 const NEXT = "b".repeat(40);
+const CI = ".github/workflows/ci.yml";
 
 const asked: CiRun = {
   installationId: 1,
@@ -16,6 +17,7 @@ const asked: CiRun = {
   head: HEAD,
   base: "base123",
   units: ["linux", "macos"],
+  workflow: CI,
 };
 
 const succeeded = { repoId: 2, runId: 9001, attempt: 1, head: HEAD };
@@ -26,7 +28,7 @@ describe("recordPasses", () => {
     await store.saveRun(asked);
 
     expect(await recordPasses(succeeded, store)).toBe(true);
-    expect(await store.lastPasses(2, 3)).toEqual(
+    expect(await store.lastPasses(2, 3, CI)).toEqual(
       new Map([
         ["linux", { head: HEAD, base: "base123", at: store.now }],
         ["macos", { head: HEAD, base: "base123", at: store.now }],
@@ -63,7 +65,7 @@ describe("recordPasses", () => {
     await store.saveRun({ ...asked, attempt: 2, units: ["linux"] });
 
     expect(await recordPasses({ ...succeeded, attempt: 2 }, store)).toBe(true);
-    expect([...(await store.lastPasses(2, 3)).keys()]).toEqual(["linux"]);
+    expect([...(await store.lastPasses(2, 3, CI)).keys()]).toEqual(["linux"]);
   });
 
   it("credits a re-run of failed jobs with the latest attempt that asked", async () => {
@@ -73,7 +75,7 @@ describe("recordPasses", () => {
 
     // Attempt 3 re-ran only the failed jobs, so its plan step never asked.
     expect(await recordPasses({ ...succeeded, attempt: 3 }, store)).toBe(true);
-    expect([...(await store.lastPasses(2, 3)).keys()]).toEqual(["linux"]);
+    expect([...(await store.lastPasses(2, 3, CI)).keys()]).toEqual(["linux"]);
   });
 
   it("still checks the head of the attempt it falls back on", async () => {
@@ -109,11 +111,31 @@ describe("lastPasses", () => {
     // Another pull request's passes don't count.
     await store.savePasses({ ...asked, runId: 9003, number: 4, head: NEXT });
 
-    expect(await store.lastPasses(2, 3)).toEqual(
+    expect(await store.lastPasses(2, 3, CI)).toEqual(
       new Map([
         ["linux", { head: NEXT, base: "base123", at: "2026-10-22T00:00:00Z" }],
         ["macos", { head: HEAD, base: "base123", at: "2026-10-21T00:00:00Z" }],
       ]),
+    );
+  });
+
+  it("counts only passes the given workflow earned", async () => {
+    const store = new FakeStore();
+    await store.savePasses(asked);
+    // A later pass from another workflow, and one recorded before workflows.
+    await store.savePasses({
+      ...asked,
+      runId: 9002,
+      head: NEXT,
+      workflow: ".github/workflows/lint.yml",
+    });
+    await store.savePasses({ ...asked, runId: 9003, head: NEXT, workflow: "" });
+
+    expect(
+      [...(await store.lastPasses(2, 3, CI)).values()].map((p) => p.head),
+    ).toEqual([HEAD, HEAD]);
+    expect(await store.lastPasses(2, 3, ".github/workflows/other.yml")).toEqual(
+      new Map(),
     );
   });
 });

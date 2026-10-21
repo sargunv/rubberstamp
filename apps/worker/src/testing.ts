@@ -76,6 +76,7 @@ export class FakeRepo implements RepoApi {
   /** The pull request's head and files, which a test may change. */
   head = "abc123";
   base = "main";
+  baseSha = "base123";
   repoId = 2;
   private = false;
   files: PullFile[] = [
@@ -99,7 +100,7 @@ export class FakeRepo implements RepoApi {
     head: { sha: this.head },
     base: {
       ref: this.base,
-      sha: "base123",
+      sha: this.baseSha,
       repo: {
         id: this.repoId,
         full_name: this.fullName,
@@ -109,6 +110,27 @@ export class FakeRepo implements RepoApi {
     changed_files: this.files.length,
   });
   pullFiles = async () => this.files;
+  /**
+   * What each `base...head` comparison lists besides the pull request's own,
+   * which lists its files; any other is gone.
+   */
+  comparisons = new Map<string, PullFile[]>();
+  /** Each comparison's merge base, where it isn't `mergeBase`. */
+  mergeBases = new Map<string, string>();
+  /** Where the branch forked from its base, unless a comparison says not. */
+  mergeBase = "fork123";
+  compared: string[] = [];
+  compare = async (base: string, head: string) => {
+    const key = `${base}...${head}`;
+    this.compared.push(key);
+    const files =
+      key === `${this.baseSha}...${this.head}`
+        ? this.files
+        : this.comparisons.get(key);
+    return files === undefined
+      ? null
+      : { mergeBase: this.mergeBases.get(key) ?? this.mergeBase, files };
+  };
   recentItems = async (count: number) => this.recent.slice(0, count);
   addLabels = async (_: number, labels: string[]) => {
     this.added.push(...labels);
@@ -186,6 +208,7 @@ export class FakeStore implements Store {
     number: number;
     unit: string;
     runId: number;
+    workflow: string;
   })[] = [];
   /** When the next pass is recorded. */
   now = "2026-10-21T00:00:00Z";
@@ -204,13 +227,18 @@ export class FakeStore implements Store {
         head: run.head,
         base: run.base,
         at: this.now,
+        workflow: run.workflow,
       });
     }
   };
-  lastPasses = async (repoId: number, number: number) => {
+  lastPasses = async (repoId: number, number: number, workflow: string) => {
     const last = new Map<string, UnitPass>();
     for (const { unit, head, base, at, ...pass } of this.passes) {
-      if (pass.repoId === repoId && pass.number === number) {
+      if (
+        pass.repoId === repoId &&
+        pass.number === number &&
+        pass.workflow === workflow
+      ) {
         last.set(unit, { head, base, at });
       }
     }

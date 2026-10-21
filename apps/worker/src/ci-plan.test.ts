@@ -19,6 +19,7 @@ import { CONFIG as LABELS_ONLY, FakeRepo, FakeStore } from "./testing.ts";
 
 const CONFIG = `
 ci:
+  workflow: .github/workflows/ci.yml
   units:
     linux: { covers: Linux. }
     macos: { covers: macOS. }
@@ -129,6 +130,23 @@ describe("ciPlan", () => {
       all: true,
       units: ["linux", "macos"],
     });
+  });
+
+  it("runs only what's left when rules skip units that already passed", async () => {
+    const { deps, save } = setup();
+    await save(HEAD, [
+      {
+        unit: "linux",
+        threshold: 0.5,
+        run: false,
+        score: null,
+        rule: "passed at this head",
+      },
+      { unit: "macos", threshold: 0.5, run: true, score: null, rule: "x" },
+    ]);
+
+    const reply = await ciPlan(query(), null, deps);
+    expect(reply.body).toMatchObject({ all: false, units: ["macos"] });
   });
 
   it("waits for a plan without queueing one unless asked to start", async () => {
@@ -257,37 +275,91 @@ describe("ciPlan", () => {
   describe("records the units the asking run executes", () => {
     const run = { run_id: 9001, run_attempt: 2 };
 
-    /** The run as GitHub reports it, started an hour ago at the head. */
+    /** GitHub's listing of a run for a pull request. */
+    const listing = (number: number, ref: string) => ({
+      number,
+      base: { ref, sha: "base123" },
+      head: { ref: "fix-camera", sha: HEAD },
+    });
+
+    /**
+     * The run as GitHub reports it, started an hour ago at the head and
+     * listed for this pull request.
+     */
     const ranOn = (repo: FakeRepo, overrides: Partial<WorkflowRun> = {}) => {
       repo.workflowRuns.set(9001, {
         id: 9001,
         event: "pull_request",
         head_sha: HEAD,
+        path: ".github/workflows/ci.yml",
         created_at: "2026-10-21T11:00:00Z",
         repository: { id: repo.repoId },
+        pull_requests: [listing(3, "main")],
         ...overrides,
       });
     };
 
-    it("from the plan it follows", async () => {
+    it("from a fork's run, which GitHub lists for no pull request", async () => {
       const { deps, repo, save, store } = setup();
-      ranOn(repo);
+      ranOn(repo, { pull_requests: [] });
       await save(HEAD, judged);
 
       await ciPlan(query(run), null, deps);
-      expect([...store.ciRuns.values()]).toEqual([
-        {
-          installationId: 1,
-          repoId: 2,
-          runId: 9001,
-          attempt: 2,
-          number: 3,
-          head: HEAD,
-          base: "base123",
-          units: ["linux"],
-        },
-      ]);
+      expect(store.ciRuns.get("2 9001 2")?.units).toEqual(["linux"]);
     });
+
+    it("from a run listed for several pull requests, this one included", async () => {
+      const { deps, repo, save, store } = setup();
+      ranOn(repo, { pull_requests: [listing(7, "main"), listing(3, "main")] });
+      await save(HEAD, judged);
+
+      await ciPlan(query(run), null, deps);
+      expect(store.ciRuns.size).toBe(1);
+    });
+
+    it.each([[".github/workflows/ci.yml"], [".github/workflows/ci.yml@main"]])(
+      "from the plan it follows, for a run of %s",
+      async (path) => {
+        const { deps, repo, save, store } = setup();
+        ranOn(repo, { path });
+        await save(HEAD, judged);
+
+        await ciPlan(query(run), null, deps);
+        expect([...store.ciRuns.values()]).toEqual([
+          {
+            installationId: 1,
+            repoId: 2,
+            runId: 9001,
+            attempt: 2,
+            number: 3,
+            head: HEAD,
+            base: "base123",
+            units: ["linux"],
+            workflow: ".github/workflows/ci.yml",
+          },
+        ]);
+      },
+    );
+
+    it.each([
+      [".github/workflows/ci@prod.yml", true],
+      [".github/workflows/ci@prod.yml@main", true],
+      [".github/workflows/ci", false],
+      [".github/workflows/ci@prod.yml.bak", false],
+    ])(
+      "for a workflow named with an @, from a run of %s: %s",
+      async (path, recorded) => {
+        const source = CONFIG.replace("ci.yml", "ci@prod.yml");
+        const { deps, repo, save, store } = setup({ source });
+        ranOn(repo, { path });
+        await save(HEAD, judged, source);
+
+        await ciPlan(query(run), null, deps);
+        expect([...store.ciRuns.values()].map((r) => r.workflow)).toEqual(
+          recorded ? [".github/workflows/ci@prod.yml"] : [],
+        );
+      },
+    );
 
     it("as every configured unit when every unit runs", async () => {
       const { deps, repo, save, store } = setup();
@@ -344,6 +416,15 @@ describe("ciPlan", () => {
       expect(store.ciRuns.size).toBe(0);
     });
 
+    it("but not without the workflow that gates jobs on units", async () => {
+      const source = CONFIG.replace(/^ {2}workflow: .*\n/m, "");
+      const { deps, repo, save, store } = setup({ source });
+      ranOn(repo);
+      await save(HEAD, judged, source);
+      expect((await ciPlan(query(run), null, deps)).code).toBe(200);
+      expect(store.ciRuns.size).toBe(0);
+    });
+
     it("but not for an action too old to name its run", async () => {
       const { deps, repo, save, store } = setup();
       ranOn(repo);
@@ -356,7 +437,21 @@ describe("ciPlan", () => {
       ["at another head", { head_sha: OLD }],
       ["for another event", { event: "pull_request_target" }],
       ["in another repository", { repository: { id: 99 } }],
+      ["of another workflow", { path: ".github/workflows/lint.yml" }],
+      [
+        "of another workflow at a ref",
+        { path: ".github/workflows/lint.yml@main" },
+      ],
+      ["of a workflow named like it", { path: ".github/workflows/ci.yml.bak" }],
       ["started over a day ago", { created_at: "2026-10-20T11:59:59Z" }],
+      [
+        "listed for another pull request",
+        { pull_requests: [listing(7, "main")] },
+      ],
+      [
+        "listed for this pull request under another base",
+        { pull_requests: [listing(3, "release")] },
+      ],
     ])("but not for a run %s", async (_, overrides) => {
       const { deps, repo, save, store } = setup();
       ranOn(repo, overrides);

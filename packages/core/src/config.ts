@@ -47,8 +47,19 @@ const CiUnit = v.strictObject({
   threshold: v.optional(Threshold),
 });
 
+// The workflow file GitHub names as a run's path. Only its successes count as
+// units passing, so another workflow at the same head can't stand in for it.
+const WorkflowPath = v.pipe(
+  v.string(),
+  v.regex(
+    /^\.github\/workflows\/[^/]+\.ya?ml$/,
+    "name a workflow file such as .github/workflows/ci.yml",
+  ),
+);
+
 const CiSection = v.strictObject({
   context: v.optional(Text),
+  workflow: v.optional(WorkflowPath),
   threshold: v.optional(Threshold),
   units: v.pipe(
     v.record(UnitId, CiUnit),

@@ -89,6 +89,14 @@ const Pull = v.object({
 
 export type Pull = v.InferOutput<typeof Pull>;
 
+const Compared = v.object({
+  merge_base_commit: v.object({ sha: v.string() }),
+  files: v.optional(v.array(File), []),
+});
+
+/** What `head` changes since its merge base with `base`, and that commit. */
+export type Comparison = { mergeBase: string; files: PullFile[] };
+
 const Repository = v.object({
   id: v.number(),
   full_name: v.string(),
@@ -101,8 +109,21 @@ const WorkflowRun = v.object({
   id: v.number(),
   event: v.string(),
   head_sha: v.string(),
+  /**
+   * The workflow file the run ran, such as `.github/workflows/ci.yml`, maybe
+   * with the ref it came from after an `@`.
+   */
+  path: v.string(),
   created_at: v.string(),
   repository: v.object({ id: v.number() }),
+  /** The pull requests the run is for. Empty for a run from a fork. */
+  pull_requests: v.array(
+    v.object({
+      number: v.number(),
+      base: v.object({ ref: v.string(), sha: v.string() }),
+      head: v.object({ ref: v.string(), sha: v.string() }),
+    }),
+  ),
 });
 
 export type WorkflowRun = v.InferOutput<typeof WorkflowRun>;
@@ -141,6 +162,11 @@ export interface RepoApi {
   pull(number: number): Promise<Pull>;
   /** A pull request's changed files, up to the first thousand. */
   pullFiles(number: number): Promise<PullFile[]>;
+  /**
+   * The merge base of `base` and `head`, and the files `head` changes since
+   * it, up to the first 300, or null if either commit is gone.
+   */
+  compare(base: string, head: string): Promise<Comparison | null>;
   addLabels(number: number, labels: string[]): Promise<void>;
   /** A GitHub Actions workflow run, or null if the repository has none. */
   workflowRun(runId: number): Promise<WorkflowRun | null>;
@@ -344,6 +370,18 @@ class RepoClient implements RepoApi {
       `/repos/${this.fullName}/pulls/${number}/files`,
       MAX_FILE_PAGES,
     );
+  }
+
+  async compare(base: string, head: string): Promise<Comparison | null> {
+    // Three dots diff from the merge base, as a pull request's files do.
+    const path = `/repos/${this.fullName}/compare/${base}...${head}`;
+    const response = await this.send("GET", path);
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new GitHubError(response.status, path, await response.text());
+    }
+    const compared = v.parse(Compared, await response.json());
+    return { mergeBase: compared.merge_base_commit.sha, files: compared.files };
   }
 
   async addLabels(number: number, labels: string[]): Promise<void> {

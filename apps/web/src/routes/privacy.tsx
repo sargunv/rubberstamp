@@ -32,7 +32,8 @@ function Privacy() {
           <li>
             When its config names CI units, it also reads a pull request's
             title, description, changed files and changes each time it opens,
-            reopens, gets new commits, or changes its base branch.
+            reopens, gets new commits, or changes its base branch, along with
+            its changes as of the commits where CI last passed.
           </li>
           <li>
             It sends those to TypeSafe's Jev model, which judges which labels
@@ -63,8 +64,9 @@ function Privacy() {
           </li>
           <li>
             <b>Which CI passed:</b> for each pull request commit, which CI units
-            each successful workflow run executed, the run, and when. These are
-            deleted on the same schedule as the label log.
+            each successful workflow run executed, the run and its workflow
+            file, and when. These are deleted on the same schedule as the label
+            log.
           </li>
           <li>
             <b>Previews you run in the dashboard:</b> the titles, labels and

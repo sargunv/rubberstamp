@@ -42,7 +42,7 @@ export type PlanQuery = v.InferOutput<typeof PlanQuery>;
 
 export type PlanReady = {
   status: "ready";
-  /** Whether every unit runs because one rule decided them all. */
+  /** Whether every unit runs because rules decided them all without scores. */
   all: boolean;
   /** The ids of the units that run. */
   units: string[];
@@ -85,23 +85,38 @@ const MAX_RUN_AGE_MS = 24 * 60 * 60_000;
 
 /**
  * Whether the run a caller names really is a pull_request run of this
- * repository at the head it asked about, started recently. The endpoint is
- * public, so a caller could otherwise tie another workflow's success, or one
- * that ran the base branch's code, to this pull request's units.
+ * repository's configured workflow at the head it asked about, started
+ * recently. The endpoint is public, so a caller could otherwise tie another
+ * workflow's success, or one that ran the base branch's code, to this pull
+ * request's units.
  */
 async function runAsked(
   repo: RepoApi,
   repoId: number,
   runId: number,
+  workflow: string,
   query: PlanQuery,
+  baseRef: string,
   now: Date,
 ): Promise<boolean> {
   try {
     const run = await repo.workflowRun(runId);
+    if (run === null) return false;
+    // Only a run GitHub lists for this pull request, as it targets now,
+    // vouches for it. GitHub lists none for a run from a fork, which leaves
+    // the head, event, workflow, and age to tie it to this pull request.
+    const listed =
+      run.pull_requests.length === 0 ||
+      run.pull_requests.some(
+        (pr) => pr.number === query.pull_request && pr.base.ref === baseRef,
+      );
     return (
-      run !== null &&
+      listed &&
       run.repository.id === repoId &&
       run.event === "pull_request" &&
+      // GitHub can suffix the ref the file came from, as in `ci.yml@main`,
+      // and a file's own name can hold an @.
+      (run.path === workflow || run.path.startsWith(`${workflow}@`)) &&
       run.head_sha.toLowerCase() === query.sha &&
       now.getTime() - Date.parse(run.created_at) <= MAX_RUN_AGE_MS
     );
@@ -165,12 +180,23 @@ export async function ciPlan(
 
   // The units the asking run will execute, so its outcome can say they passed
   // at this head. Only answers it acts on are recorded, never pending ones.
+  // Without the workflow that gates jobs on units, any other pull_request
+  // workflow's success could stand in for it, so nothing is recorded.
+  const workflow = parsed.config.ci?.workflow;
   const record = async (units: string[], base: string) => {
     if (query.run_id === undefined || query.run_attempt === undefined) return;
+    if (workflow === undefined) return;
     const now = deps.now?.() ?? new Date();
-    if (!(await runAsked(repo, repository.id, query.run_id, query, now))) {
-      return;
-    }
+    const asked = await runAsked(
+      repo,
+      repository.id,
+      query.run_id,
+      workflow,
+      query,
+      pull.base.ref,
+      now,
+    );
+    if (!asked) return;
     await deps.store.saveRun({
       installationId: installation.id,
       repoId: repository.id,
@@ -180,6 +206,7 @@ export async function ciPlan(
       head: query.sha,
       base,
       units,
+      workflow,
     });
   };
 
@@ -193,7 +220,8 @@ export async function ciPlan(
   const plan = await deps.store.findPlan(key);
   if (plan !== null) {
     const { decisions } = plan;
-    const all = decisions.every((d) => d.score === null);
+    // A unit that passed already is decided without a score but doesn't run.
+    const all = decisions.every((d) => d.run && d.score === null);
     const units = decisions.filter((d) => d.run).map((d) => d.unit);
     await record(all ? configured : units, plan.base);
     return {
