@@ -8,6 +8,7 @@ export default defineConfig({
       "**/node_modules/**",
       "**/dist/**",
       "apps/worker/worker-configuration.d.ts",
+      "apps/web/src/routeTree.gen.ts",
     ],
     options: { typeAware: true, typeCheck: true },
     rules: {

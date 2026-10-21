@@ -40,16 +40,36 @@ dir = "apps/worker"
 run = "pnpm exec wrangler types"
 
 [tasks."worker:dev"]
-description = "Run the Worker locally against local D1, R2, and Queues."
-dir = "apps/worker"
-run = "pnpm exec wrangler d1 migrations apply rubberstamp --local && pnpm exec wrangler dev"
-
-[tasks.deploy]
-description = "Create missing queues, migrate D1, and deploy the Worker with its secrets from fnox."
+description = "Run the Worker locally on port 8787 with secrets from fnox, against local D1, Durable Objects, and Queues."
 dir = "apps/worker"
 shell = "bash -c"
 run = '''
 set -euo pipefail
+fnox export --format json |
+  node -e 'const { secrets } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+    secrets.APP_ORIGIN = "http://localhost:5199";
+    for (const [k, v] of Object.entries(secrets)) console.log(`${k}=${JSON.stringify(v)}`);' > .dev.vars
+mkdir -p ../web/dist
+pnpm exec wrangler d1 migrations apply rubberstamp --local
+pnpm exec wrangler dev --port 8787
+'''
+
+[tasks."web:dev"]
+description = "Run the web app on port 5199, proxying the API to the local Worker."
+dir = "apps/web"
+run = "pnpm exec vp dev --port 5199 --strictPort"
+
+[tasks.dev]
+description = "Run the Worker and the web app together. Open http://localhost:5199."
+depends = ["worker:dev", "web:dev"]
+
+[tasks.deploy]
+description = "Build the web app, create missing queues, migrate D1, and deploy the Worker with its secrets from fnox."
+dir = "apps/worker"
+shell = "bash -c"
+run = '''
+set -euo pipefail
+(cd ../web && pnpm exec vp build)
 for queue in rubberstamp-jobs rubberstamp-jobs-dlq; do
   pnpm exec wrangler queues info "$queue" > /dev/null 2>&1 ||
     pnpm exec wrangler queues create "$queue"

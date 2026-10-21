@@ -57,8 +57,9 @@ labels:
 Each installation gets a monthly budget of Jev input tokens, about $1 of Jev,
 and every installation shares a global monthly ceiling. An issue costs about
 3,000 tokens and a large pull request 15,000 to 20,000, so the budget covers
-roughly 1,000 to 8,000 items a month. Over either budget, Rubberstamp adds no
-labels until the next UTC month.
+roughly 1,000 to 8,000 items a month. Previews in the dashboard spend from the
+same budget; one costs about as much as labeling 20 items. Over either budget,
+Rubberstamp adds no labels until the next UTC month.
 
 ## Data
 

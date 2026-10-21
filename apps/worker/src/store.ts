@@ -1,10 +1,39 @@
-import type { LabelDecision } from "@sargunv/rubberstamp-core";
+import { LogEntry, type LabelDecision } from "@sargunv/rubberstamp-core";
+import * as v from "valibot";
+
+/** A label_runs row, as the decision log shows it. */
+const RunRow = v.pipe(
+  v.object({
+    number: v.number(),
+    title: v.nullable(v.string()),
+    type: v.nullable(v.picklist(["issue", "pull request"])),
+    model: v.string(),
+    decisions: v.string(),
+    added: v.string(),
+    input_tokens: v.number(),
+    created_at: v.string(),
+  }),
+  v.transform((row) => ({
+    number: row.number,
+    title: row.title,
+    type: row.type,
+    model: row.model,
+    decisions: JSON.parse(row.decisions),
+    added: JSON.parse(row.added),
+    inputTokens: row.input_tokens,
+    // SQLite's datetime('now') is UTC without a zone.
+    createdAt: `${row.created_at.replace(" ", "T")}Z`,
+  })),
+  LogEntry,
+);
 
 export type LabelRun = {
   installationId: number;
   repoId: number;
   repo: string;
   number: number;
+  title: string;
+  type: "issue" | "pull request";
   model: string;
   decisions: LabelDecision[];
   added: string[];
@@ -74,14 +103,16 @@ export class CloudflareStore implements Store {
     await this.db
       .prepare(
         `INSERT INTO label_runs
-           (installation_id, repo_id, repo, number, model, decisions, added, input_tokens)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (installation_id, repo_id, repo, number, title, type, model, decisions, added, input_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         run.installationId,
         run.repoId,
         run.repo,
         run.number,
+        run.title,
+        run.type,
         run.model,
         JSON.stringify(run.decisions),
         JSON.stringify(run.added),
@@ -101,6 +132,18 @@ export class CloudflareStore implements Store {
       )
       .bind(id, account, deleted ? 1 : 0)
       .run();
+  }
+
+  /** A repository's newest label runs, newest first. */
+  async recentRuns(repo: string, limit: number): Promise<LogEntry[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT number, title, type, model, decisions, added, input_tokens, created_at
+         FROM label_runs WHERE repo = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+      )
+      .bind(repo, limit)
+      .all();
+    return results.map((row) => v.parse(RunRow, row));
   }
 
   /** Forgets an installation's runs, or only those of some repositories. */

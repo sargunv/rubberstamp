@@ -10,7 +10,12 @@ private repositories only on an allowlist. Runs on Cloudflare Workers.
 packages/core   pure TS shared by the worker and the web UI: config schema,
                 question building, decisions, state description, Jev client
 apps/worker     Cloudflare Worker: GitHub webhooks, queue consumer, jobs,
-                D1 store (migrations/), daily cleanup
+                D1 store (migrations/), daily cleanup, the dashboard's API
+                and sign-in, and per-repo preview Durable Objects. It also
+                serves apps/web's build as static assets.
+apps/web        The dashboard: React, TanStack Router (file-based routes in
+                src/routes) and TanStack Query, Tailwind, and Base UI. Route
+                loaders only fill the Query cache; components read from it.
 README.md       what Rubberstamp does and the configuration reference
 ```
 
@@ -20,8 +25,11 @@ README.md       what Rubberstamp does and the configuration reference
   a change merges.
 - `mise run test`: unit tests only.
 - `mise run fix`: apply formatters and auto-fixable lint.
-- `mise run worker:dev`: run the Worker locally against local D1 and Queues. Put
-  secrets in `apps/worker/.dev.vars` (gitignored).
+- `mise run dev`: run the Worker (port 8787) and the dashboard (port 5199)
+  together, with secrets from fnox. Open http://localhost:5199.
+- `mise run worker:dev`: run the Worker locally against local D1, Durable
+  Objects, and Queues. It writes `apps/worker/.dev.vars` (gitignored) from fnox
+  each run.
 - `mise run deploy`: create missing queues, migrate D1, and deploy the Worker
   with its secrets from fnox. Wrangler creates the D1 database itself and finds
   it by name afterward.

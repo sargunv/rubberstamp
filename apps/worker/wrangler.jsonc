@@ -8,10 +8,14 @@
   "routes": [{ "pattern": "rubberstamp.sargunv.dev", "custom_domain": true }],
   "vars": {
     "GITHUB_CLIENT_ID": "Iv23li79Tp7Nqf6OsCCb",
+    "APP_SLUG": "rubberstamp-bot",
+    // Where the web app lives; sign-in returns here. .dev.vars overrides it.
+    "APP_ORIGIN": "https://rubberstamp.sargunv.dev",
     "JEV_MODEL": "jev-latest",
     "PRIVATE_ALLOWLIST": "sargunv/*,maplibre/*,stringline-app/*",
-    // Jev input tokens per UTC month. Jev costs $0.042 per million input
-    // tokens, so 24M is about $1. Accounts override the per-installation budget.
+    // Jev input tokens per UTC month, for labeling and previews alike. Jev
+    // costs $0.042 per million input tokens, so 24M is about $1. Accounts
+    // override the per-installation budget.
     "BUDGETS": { "installation": 24000000, "global": 240000000, "accounts": {} }
   },
   "d1_databases": [
@@ -23,6 +27,15 @@
   ],
   // Daily cleanup of old label runs.
   "triggers": { "crons": ["17 4 * * *"] },
+  "assets": {
+    "directory": "../web/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/auth/*", "/webhooks/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "PREVIEWS", "class_name": "RepoPreviews" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RepoPreviews"] }],
   "queues": {
     "producers": [{ "binding": "JOBS", "queue": "rubberstamp-jobs" }],
     "consumers": [
@@ -36,8 +49,10 @@
   },
   "secrets": {
     "required": [
+      "GITHUB_CLIENT_SECRET",
       "GITHUB_PRIVATE_KEY",
       "GITHUB_WEBHOOK_SECRET",
+      "SESSION_SECRET",
       "TYPESAFE_API_KEY"
     ]
   }

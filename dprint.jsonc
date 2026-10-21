@@ -11,6 +11,7 @@
     "mise.lock",
     "pnpm-lock.yaml",
     "apps/worker/worker-configuration.d.ts",
+    "apps/web/src/routeTree.gen.ts",
   ],
   "json": { "preferSingleLine": true },
   "markdown": { "textWrap": "always" },

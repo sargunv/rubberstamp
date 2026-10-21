@@ -102,6 +102,8 @@ export async function runLabelJob(
     repoId: job.repoId,
     repo: job.repo,
     number: job.number,
+    title: issue.title,
+    type: item.type,
     model: response.model,
     decisions,
     added,

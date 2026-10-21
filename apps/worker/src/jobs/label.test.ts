@@ -1,71 +1,10 @@
-import type { Request, Response } from "@sargunv/rubberstamp-core";
+import type { Request } from "@sargunv/rubberstamp-core";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { Issue, RepoApi } from "../github/client.ts";
-import type { LabelRun, Store } from "../store.ts";
+import type { LabelRun } from "../store.ts";
+import { CONFIG, FakeRepo, FakeStore, jev } from "../testing.ts";
 import { runLabelJob, type LabelJob } from "./label.ts";
-
-const CONFIG = `
-context: A C API for MapLibre Native.
-labels:
-  groups:
-    kind: { min: 1, max: 1, labels: [bug, feature] }
-    area: { labels: ["area:*"] }
-`;
-
-class FakeRepo implements RepoApi {
-  readonly fullName = "o/r";
-  added: string[] = [];
-  constructor(
-    private readonly source: string | null,
-    private readonly item: Issue,
-    private readonly laterLabels: string[] = [],
-  ) {}
-  private reads = 0;
-  config = async () => this.source;
-  labels = async () => [
-    { name: "bug", description: "Broken" },
-    { name: "feature", description: "New" },
-    { name: "area:map", description: "Maps" },
-    { name: "area:docs", description: "Docs" },
-  ];
-  issue = async () => {
-    this.reads++;
-    const extra = this.reads > 1 ? this.laterLabels : [];
-    return {
-      ...this.item,
-      labels: [...this.item.labels, ...extra.map((name) => ({ name }))],
-    };
-  };
-  pullFiles = async () => [
-    {
-      filename: "src/map.cpp",
-      status: "modified",
-      additions: 3,
-      deletions: 1,
-      patch: "@@ -1 +1 @@\n-a\n+b",
-    },
-  ];
-  addLabels = async (_: number, labels: string[]) => {
-    this.added.push(...labels);
-  };
-}
-
-class FakeStore implements Store {
-  runs: LabelRun[] = [];
-  spent = 0;
-  hasLabelRun = async () => this.runs.length > 0;
-  usage = async () => this.spent;
-  globalSpent = 0;
-  globalUsage = async () => this.globalSpent;
-  addUsage = async (_: number, __: string, tokens: number) => {
-    this.spent += tokens;
-  };
-  saveLabelRun = async (run: LabelRun) => {
-    this.runs.push(run);
-  };
-  saveInstallation = async () => {};
-}
 
 const job: LabelJob = {
   type: "label",
@@ -81,25 +20,6 @@ const pull: Issue = {
   labels: [],
   pull_request: {},
 };
-
-function jev(requests: Request[]) {
-  return async (request: Request): Promise<Response> => {
-    requests.push(request);
-    return {
-      model: "jev-1.13.0",
-      usage: { input_tokens: 1000 },
-      answers: {
-        "group:kind": {
-          type: "choice",
-          choice: "bug",
-          probabilities: { bug: 0.9, feature: 0.1 },
-        },
-        "label:area:map": { type: "noul", noul: 0.95 },
-        "label:area:docs": { type: "noul", noul: 0.1 },
-      },
-    };
-  };
-}
 
 describe("runLabelJob", () => {
   it("judges a pull request with its diff and adds the chosen labels", async () => {
@@ -181,6 +101,8 @@ function storeRun(): LabelRun {
     repoId: 2,
     repo: "o/r",
     number: 3,
+    title: "",
+    type: "issue",
     model: "",
     decisions: [],
     added: [],

@@ -1,0 +1,225 @@
+@import "tailwindcss";
+@import "@fontsource-variable/sofia-sans-extra-condensed";
+@import "@fontsource-variable/public-sans";
+@import "@fontsource-variable/spline-sans-mono";
+
+/* Ledger paper and violet copying ink by day, a green-black blotter by night. */
+:root {
+  --paper: #eaf0e6;
+  --sheet: #f3f7f0;
+  --rule: #c9d6c3;
+  --margin: #d98a80;
+  --ink: #1d2a25;
+  --muted: #5d6d65;
+  --violet: #5b3fc0;
+  --on-violet: #f6f3ff;
+  --stamp-blend: multiply;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #131917;
+    --sheet: #18201d;
+    --rule: #2a3631;
+    --margin: #8c4a44;
+    --ink: #dce6df;
+    --muted: #8b9b93;
+    --violet: #a895ff;
+    --on-violet: #160d33;
+    --stamp-blend: screen;
+  }
+}
+
+@theme {
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-rule: var(--rule);
+  --color-margin: var(--margin);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-violet: var(--violet);
+  --color-on-violet: var(--on-violet);
+  --font-display:
+    "Sofia Sans Extra Condensed Variable",
+    "Arial Narrow",
+    sans-serif;
+  --font-sans: "Public Sans Variable", system-ui, sans-serif;
+  --font-mono: "Spline Sans Mono Variable", ui-monospace, monospace;
+}
+
+html {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--violet);
+  outline-offset: 2px;
+}
+
+/*
+ * A rubber stamp's impression, in Rubberstamp's one ink, pressed as hard as
+ * Rubberstamp is sure of it.
+ */
+.stamp {
+  --ink-color: var(--violet);
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1em 0.45em 0.05em;
+  border: 2px solid var(--ink-color);
+  outline: 1px solid var(--ink-color);
+  outline-offset: 2px;
+  border-radius: 3px;
+  color: var(--ink-color);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.05rem;
+  line-height: 1.1;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  rotate: var(--tilt);
+  opacity: var(--pressure);
+  mix-blend-mode: var(--stamp-blend);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='90'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.5' numOctaves='3' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -12 8.4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mask-clip: no-clip;
+  mask-position: var(--grain);
+  animation: press 380ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+@keyframes press {
+  from {
+    opacity: 0;
+    scale: 1.35;
+  }
+  60% {
+    scale: 0.96;
+  }
+  to {
+    opacity: var(--pressure);
+    scale: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp {
+    animation: none;
+  }
+}
+
+.signin-stamp {
+  --tilt: -4deg !important;
+  padding: 0.08em 0.3em 0;
+  border-width: 0.07em;
+  border-radius: 0.06em;
+  outline-width: 0.03em;
+  outline-offset: 0.06em;
+  font-size: clamp(3rem, 13vw, 5.75rem);
+  letter-spacing: 0.06em;
+  mask-size: 360px 180px;
+  animation-duration: 520ms;
+  animation-delay: 150ms;
+}
+
+/* A label as GitHub draws it: its color as the fill, tinted in dark mode. */
+.label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0.5625rem;
+  border: 1px solid color-mix(in oklch, var(--label), var(--ink) 15%);
+  border-radius: 999px;
+  background: var(--label);
+  color: var(--label-text);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.375rem;
+  white-space: nowrap;
+}
+
+@media (prefers-color-scheme: dark) {
+  .label {
+    border-color: color-mix(in oklch, var(--label) 30%, transparent);
+    background: color-mix(in oklch, var(--label) 18%, transparent);
+    color: oklch(from var(--label) max(l, 0.82) c h);
+  }
+}
+
+/* Diff marks: + for a label Rubberstamp adds, − for one it wouldn't pick. */
+:root {
+  --add: #1a7f37;
+  --drop: #cf222e;
+  /* GitHub's state colors for issues and pull requests. */
+  --gh-open: #1a7f37;
+  --gh-done: #8250df;
+  --gh-closed: #cf222e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --add: #3fb950;
+    --drop: #f85149;
+    --gh-open: #3fb950;
+    --gh-done: #a371f7;
+    --gh-closed: #f85149;
+  }
+}
+
+.label-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+}
+
+.label-mark {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.label-change[data-change="added"] .label-mark {
+  color: var(--add);
+}
+
+/* A ring inside the label's own border, so it takes no extra room. */
+.label-change[data-change="added"] .label {
+  border-color: var(--add);
+  box-shadow: inset 0 0 0 1px var(--add);
+}
+
+.label-change[data-change="dropped"] .label-mark {
+  color: var(--drop);
+}
+
+.label-change[data-change="dropped"] .label {
+  opacity: 0.55;
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
+
+.label-change[data-change="outside"] .label {
+  opacity: 0.6;
+}
+
+/* The ledger's red margin rule, between item numbers and their entries. */
+.ledger {
+  --mcol: 3.75rem;
+}
+
+@media (width >= 64rem) {
+  .ledger {
+    --mcol: 4.5rem;
+  }
+}
+
+.ledger::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: var(--mcol);
+  border-left: 1px solid var(--margin);
+  pointer-events: none;
+}

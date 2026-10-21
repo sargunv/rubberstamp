@@ -1,0 +1,27 @@
+{
+  "name": "@sargunv/rubberstamp-web",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vp dev", "build": "vp build" },
+  "dependencies": {
+    "@base-ui/react": "catalog:",
+    "@fontsource-variable/public-sans": "catalog:",
+    "@fontsource-variable/sofia-sans-extra-condensed": "catalog:",
+    "@fontsource-variable/spline-sans-mono": "catalog:",
+    "@primer/octicons-react": "catalog:",
+    "@sargunv/rubberstamp-core": "workspace:*",
+    "@tanstack/react-query": "catalog:",
+    "@tanstack/react-router": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "valibot": "catalog:"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "catalog:",
+    "@tanstack/router-plugin": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "tailwindcss": "catalog:"
+  }
+}

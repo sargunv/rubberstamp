@@ -1,8 +1,4 @@
-import {
-  CONFIG_PATH,
-  type PullFile,
-  type RepoLabel,
-} from "@sargunv/rubberstamp-core";
+import { CONFIG_PATH, type PullFile } from "@sargunv/rubberstamp-core";
 import * as v from "valibot";
 
 import { appJwt } from "./auth.ts";
@@ -21,10 +17,28 @@ export class GitHubError extends Error {
 
 const Token = v.object({ token: v.string(), expires_at: v.string() });
 
+const Installation = v.object({
+  id: v.number(),
+  account: v.object({ login: v.string() }),
+});
+
+const UserRepo = v.object({
+  full_name: v.string(),
+  private: v.boolean(),
+  permissions: v.optional(v.object({ admin: v.boolean(), push: v.boolean() })),
+});
+
+export type UserRepo = v.InferOutput<typeof UserRepo>;
+
+const User = v.object({ login: v.string(), avatar_url: v.string() });
+
 const Label = v.object({
   name: v.string(),
   description: v.nullable(v.string()),
+  color: v.string(),
 });
+
+export type ColoredLabel = v.InferOutput<typeof Label>;
 
 const Issue = v.object({
   title: v.string(),
@@ -45,11 +59,31 @@ const File = v.object({
 
 export type Issue = v.InferOutput<typeof Issue>;
 
+const ListedItem = v.object({
+  number: v.number(),
+  title: v.string(),
+  body: v.nullable(v.string()),
+  state: v.string(),
+  state_reason: v.optional(v.nullable(v.string())),
+  draft: v.optional(v.boolean()),
+  user: v.nullable(v.object({ login: v.string() })),
+  created_at: v.string(),
+  html_url: v.string(),
+  labels: v.array(v.object({ name: v.string() })),
+  pull_request: v.optional(
+    v.object({ merged_at: v.optional(v.nullable(v.string())) }),
+  ),
+});
+
+export type ListedItem = v.InferOutput<typeof ListedItem>;
+
 /** The calls Rubberstamp makes against one repository. */
 export interface RepoApi {
   readonly fullName: string;
   config(): Promise<string | null>;
-  labels(): Promise<RepoLabel[]>;
+  labels(): Promise<ColoredLabel[]>;
+  /** The newest issues and pull requests, newest first. */
+  recentItems(count: number): Promise<ListedItem[]>;
   issue(number: number): Promise<Issue>;
   pullFiles(number: number): Promise<PullFile[]>;
   addLabels(number: number, labels: string[]): Promise<void>;
@@ -70,6 +104,7 @@ export class GitHubApp {
     number,
     { token: string; expires: number }
   >();
+  private jwt: { token: Promise<string>; expires: number } | undefined;
   private readonly send: typeof fetch;
 
   constructor(
@@ -99,10 +134,22 @@ export class GitHubApp {
     };
   }
 
+  /** The app's own JWT, reused until a minute before it expires. */
+  private appToken(): Promise<string> {
+    if (!this.jwt || this.jwt.expires < Date.now()) {
+      this.jwt = {
+        token: appJwt(this.clientId, this.privateKey),
+        // appJwt tokens last nine minutes.
+        expires: Date.now() + 8 * 60_000,
+      };
+    }
+    return this.jwt.token;
+  }
+
   async installationToken(installationId: number): Promise<string> {
     const cached = this.tokens.get(installationId);
     if (cached && cached.expires > Date.now() + 5 * 60_000) return cached.token;
-    const send = this.request(() => appJwt(this.clientId, this.privateKey));
+    const send = this.request(() => this.appToken());
     const path = `/app/installations/${installationId}/access_tokens`;
     const response = await send("POST", path);
     if (!response.ok) {
@@ -114,6 +161,26 @@ export class GitHubApp {
       expires: Date.parse(token.expires_at),
     });
     return token.token;
+  }
+
+  /** The app's installation on a repository, or null if it has none. */
+  async installationFor(
+    fullName: string,
+  ): Promise<{ id: number; account: string } | null> {
+    const send = this.request(() => this.appToken());
+    const path = `/repos/${fullName}/installation`;
+    const response = await send("GET", path);
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new GitHubError(response.status, path, await response.text());
+    }
+    const installation = v.parse(Installation, await response.json());
+    return { id: installation.id, account: installation.account.login };
+  }
+
+  /** Calls made as a signed-in user, with their user access token. */
+  user(token: string): UserApi {
+    return new UserClient(this.request(async () => token));
   }
 
   repo(installationId: number, fullName: string): RepoApi {
@@ -174,8 +241,16 @@ class RepoClient implements RepoApi {
     return response.text();
   }
 
-  labels(): Promise<RepoLabel[]> {
+  labels(): Promise<ColoredLabel[]> {
     return this.pages(Label, `/repos/${this.fullName}/labels`, 20);
+  }
+
+  recentItems(count: number): Promise<ListedItem[]> {
+    return this.json(
+      v.array(ListedItem),
+      "GET",
+      `/repos/${this.fullName}/issues?state=all&sort=created&direction=desc&per_page=${Math.min(count, PAGE)}`,
+    );
   }
 
   issue(number: number): Promise<Issue> {
@@ -197,5 +272,66 @@ class RepoClient implements RepoApi {
       `/repos/${this.fullName}/issues/${number}/labels`,
       { labels },
     );
+  }
+}
+
+/** What the signed-in user can see, through the app. */
+export interface UserApi {
+  me(): Promise<{ login: string; avatarUrl: string }>;
+  /** Repositories in the app's installations that the user can see. */
+  repos(): Promise<UserRepo[]>;
+  /** The user's view of one repository, or null if they can't see it. */
+  repo(fullName: string): Promise<UserRepo | null>;
+}
+
+// One account with a thousand repositories is ten pages.
+const MAX_REPO_PAGES = 20;
+
+class UserClient implements UserApi {
+  constructor(private readonly send: Send) {}
+
+  private async json<T extends v.GenericSchema>(
+    schema: T,
+    path: string,
+  ): Promise<v.InferOutput<T>> {
+    const response = await this.send("GET", path);
+    if (!response.ok) {
+      throw new GitHubError(response.status, path, await response.text());
+    }
+    return v.parse(schema, await response.json());
+  }
+
+  async me() {
+    const user = await this.json(User, "/user");
+    return { login: user.login, avatarUrl: user.avatar_url };
+  }
+
+  async repos(): Promise<UserRepo[]> {
+    const { installations } = await this.json(
+      v.object({ installations: v.array(Installation) }),
+      `/user/installations?per_page=${PAGE}`,
+    );
+    const repos: UserRepo[] = [];
+    for (const installation of installations) {
+      for (let page = 1; page <= MAX_REPO_PAGES; page++) {
+        const { repositories } = await this.json(
+          v.object({ repositories: v.array(UserRepo) }),
+          `/user/installations/${installation.id}/repositories?per_page=${PAGE}&page=${page}`,
+        );
+        repos.push(...repositories);
+        if (repositories.length < PAGE) break;
+      }
+    }
+    return repos;
+  }
+
+  async repo(fullName: string): Promise<UserRepo | null> {
+    const path = `/repos/${fullName}`;
+    const response = await this.send("GET", path);
+    if (response.status === 404 || response.status === 403) return null;
+    if (!response.ok) {
+      throw new GitHubError(response.status, path, await response.text());
+    }
+    return v.parse(UserRepo, await response.json());
   }
 }

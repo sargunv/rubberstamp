@@ -1,14 +1,15 @@
-import { ask, type Request } from "@sargunv/rubberstamp-core";
 import { Hono } from "hono";
 import * as v from "valibot";
 
-import { parseAllowlist } from "./allowlist.ts";
-import { Budgets, budgetFor } from "./budget.ts";
+import { api, auth } from "./api.ts";
+import { budgetFor } from "./budget.ts";
 import { verifyWebhook } from "./github/auth.ts";
-import { GitHubApp } from "./github/client.ts";
 import { runLabelJob } from "./jobs/label.ts";
+import { services } from "./services.ts";
 import { CloudflareStore } from "./store.ts";
-import { webhookEffects, type Policy } from "./webhooks.ts";
+import { webhookEffects } from "./webhooks.ts";
+
+export { RepoPreviews } from "./preview/object.ts";
 
 const Job = v.object({
   type: v.literal("label"),
@@ -21,13 +22,11 @@ const Job = v.object({
 /** How long a live run's decisions are kept. */
 const RUN_RETENTION_DAYS = 180;
 
-function policy(env: Env): Policy {
-  return { privateAllowlist: parseAllowlist(env.PRIVATE_ALLOWLIST) };
-}
-
 const app = new Hono<{ Bindings: Env }>();
 
-app.get("/", (c) => c.text("rubberstamp"));
+// Everything else is the web app, served from static assets.
+app.route("/auth", auth);
+app.route("/api", api);
 
 app.post("/webhooks/github", async (c) => {
   const body = await c.req.text();
@@ -36,7 +35,11 @@ app.post("/webhooks/github", async (c) => {
     return c.text("bad signature", 401);
   }
   const event = c.req.header("X-GitHub-Event") ?? "";
-  const effects = webhookEffects(event, JSON.parse(body), policy(c.env));
+  const effects = webhookEffects(
+    event,
+    JSON.parse(body),
+    services(c.env).policy,
+  );
   const store = new CloudflareStore(c.env.DB);
   await Promise.all([
     effects.jobs.length > 0
@@ -58,11 +61,7 @@ export default {
   },
 
   async queue(batch, env) {
-    const github = new GitHubApp(env.GITHUB_CLIENT_ID, env.GITHUB_PRIVATE_KEY);
-    const store = new CloudflareStore(env.DB);
-    const budgets = v.parse(Budgets, env.BUDGETS);
-    const jev = (request: Request) =>
-      ask(request, { apiKey: env.TYPESAFE_API_KEY });
+    const { github, store, budgets, jev } = services(env);
     for (const message of batch.messages) {
       const job = v.safeParse(Job, message.body);
       if (!job.success) {
