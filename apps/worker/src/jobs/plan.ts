@@ -7,6 +7,7 @@ import {
   planRequests,
   unitScores,
   type Config,
+  type PullFile,
   type Response,
   type Unit,
   type UnitDecision,
@@ -61,13 +62,20 @@ export async function runPlanJob(
   const units = ciUnits(parsed.config);
   if (units.length === 0) return { status: "skipped", reason: "ci disabled" };
 
-  const pull = await repo.pull(job.number);
-  // A later push or retarget queued its own plan, and the files now show it.
-  if (pull.head.sha !== job.head || pull.base.ref !== job.base) {
-    return { status: "skipped", reason: "superseded" };
-  }
+  // A later push or retarget queued its own plan. The files show whatever the
+  // pull request is now, so it must be the same before and after reading them.
+  const current = async () => {
+    const pull = await repo.pull(job.number);
+    return pull.head.sha === job.head && pull.base.ref === job.base
+      ? pull
+      : null;
+  };
+  const pull = await current();
+  if (!pull) return { status: "skipped", reason: "superseded" };
+  const files = await repo.pullFiles(job.number);
+  if (!(await current())) return { status: "skipped", reason: "superseded" };
 
-  const judged = await judge(job, deps, pull, units, parsed.config);
+  const judged = await judge(job, deps, pull, files, units, parsed.config);
   await store.savePlan({
     installationId: job.installationId,
     repoId: job.repoId,
@@ -87,6 +95,7 @@ async function judge(
   job: PlanJob,
   deps: PlanDeps,
   pull: Pull,
+  files: PullFile[],
   units: Unit[],
   config: Config,
 ): Promise<Judged> {
@@ -109,7 +118,6 @@ async function judge(
   );
   if (spent) return fallback(spent);
 
-  const files = await deps.repo.pullFiles(job.number);
   const requests =
     files.length < pull.changed_files
       ? null

@@ -125,6 +125,20 @@ describe("runPlanJob", () => {
     expect(store.plans).toHaveLength(1);
   });
 
+  it("skips when a push lands while it reads the files", async () => {
+    const repo = new FakeRepo(CONFIG, pull);
+    const files = repo.pullFiles;
+    repo.pullFiles = async () => {
+      repo.head = "def456";
+      return files();
+    };
+    const store = new FakeStore();
+    expect(await runPlanJob(job, deps(repo, store))).toMatchObject({
+      reason: "superseded",
+    });
+    expect(store.plans).toEqual([]);
+  });
+
   it("plans again when the pull request is retargeted at the same head", async () => {
     const store = new FakeStore();
     const repo = new FakeRepo(CONFIG, pull);

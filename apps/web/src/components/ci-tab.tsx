@@ -52,7 +52,7 @@ export function CiTab({
         const running = plan.decisions.filter((d) => d.run);
         return (
           <LedgerRow
-            key={`${plan.number}-${plan.head}`}
+            key={`${plan.number}-${plan.createdAt}`}
             number={plan.number}
             url={`https://github.com/${repo}/pull/${plan.number}`}
             icon={<ItemKindIcon type="pull request" />}
