@@ -2,7 +2,6 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { PreviewTab } from "../../../components/preview-tab.tsx";
-import { LedgerSkeleton } from "../../../components/skeleton.tsx";
 import { previewQuery, repoQuery } from "../../../queries.ts";
 import { repoName, useReadyRepo } from "./-shared.ts";
 
@@ -14,7 +13,6 @@ export const Route = createFileRoute("/$owner/$repo/preview")({
       await queryClient.ensureQueryData(previewQuery(name));
     }
   },
-  pendingComponent: LedgerSkeleton,
   component: function Preview() {
     const { repo, status } = useReadyRepo();
     const { data } = useSuspenseQuery(previewQuery(repo));

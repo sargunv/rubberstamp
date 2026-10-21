@@ -1,8 +1,8 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
+import { PendingBar } from "../../../components/pending.tsx";
 import { RepoLayout, RepoShell } from "../../../components/repo-layout.tsx";
-import { LedgerSkeleton } from "../../../components/skeleton.tsx";
 import { repoQuery } from "../../../queries.ts";
 import { repoName } from "./-shared.ts";
 
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/$owner/$repo")({
   pendingComponent: function RepoPending() {
     return (
       <RepoShell repo={repoName(Route.useParams())} tabs>
-        <LedgerSkeleton />
+        <PendingBar />
       </RepoShell>
     );
   },

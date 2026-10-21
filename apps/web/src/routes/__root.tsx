@@ -2,7 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 
 import { Footer } from "../components/footer.tsx";
-import { AppSkeleton } from "../components/skeleton.tsx";
+import { AppPending } from "../components/pending.tsx";
 import { meQuery } from "../queries.ts";
 
 export const Route = createRootRouteWithContext<{
@@ -21,7 +21,7 @@ export const Route = createRootRouteWithContext<{
       </div>
     );
   },
-  pendingComponent: AppSkeleton,
+  pendingComponent: AppPending,
   errorComponent: function Failed({ error, reset }) {
     return (
       <main className="mx-auto max-w-xl px-5 pt-24">

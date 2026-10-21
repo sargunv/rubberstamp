@@ -2,7 +2,6 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { LogTab } from "../../../components/log-tab.tsx";
-import { LedgerSkeleton } from "../../../components/skeleton.tsx";
 import { logQuery, repoQuery } from "../../../queries.ts";
 import { repoName, useReadyRepo } from "./-shared.ts";
 
@@ -14,7 +13,6 @@ export const Route = createFileRoute("/$owner/$repo/log")({
       await queryClient.ensureQueryData(logQuery(name));
     }
   },
-  pendingComponent: LedgerSkeleton,
   component: function Log() {
     const { repo, colors } = useReadyRepo();
     const { data } = useSuspenseQuery(logQuery(repo));

@@ -4,7 +4,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import {
   AccountNotFound,
   AccountPage,
-  AccountSkeleton,
+  AccountPending,
 } from "../../components/account.tsx";
 import { accountQuery } from "../../queries.ts";
 
@@ -14,8 +14,8 @@ export const Route = createFileRoute("/$owner/")({
   },
   loader: ({ context, params }) =>
     context.queryClient.ensureQueryData(accountQuery(params.owner)),
-  pendingComponent: function AccountPending() {
-    return <AccountSkeleton owner={Route.useParams().owner} />;
+  pendingComponent: function PendingAccount() {
+    return <AccountPending owner={Route.useParams().owner} />;
   },
   component: function AccountRoute() {
     const { owner } = Route.useParams();

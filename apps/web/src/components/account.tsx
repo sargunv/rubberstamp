@@ -14,7 +14,7 @@ import { GitHubLink } from "./github-link.tsx";
 import { Chevron, Header } from "./header.tsx";
 import { LabelDiff } from "./label.tsx";
 import { Ledger, LedgerRow } from "./ledger.tsx";
-import { LedgerSkeleton } from "./skeleton.tsx";
+import { PendingBar } from "./pending.tsx";
 
 type Repo = Account["repos"][number];
 
@@ -69,16 +69,10 @@ function Shell({ owner, children }: { owner: string; children: ReactNode }) {
   );
 }
 
-export function AccountSkeleton({ owner }: { owner: string }) {
+export function AccountPending({ owner }: { owner: string }) {
   return (
     <Shell owner={owner}>
-      <div aria-busy="true" className="mt-12">
-        <span className="sr-only">Loading</span>
-        <span className="block h-8 animate-pulse rounded-[3px] bg-rule motion-reduce:animate-none" />
-      </div>
-      <div className="mt-14">
-        <LedgerSkeleton rows={4} />
-      </div>
+      <PendingBar />
     </Shell>
   );
 }

@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 
 import { Header } from "./header.tsx";
-import { ListSkeleton } from "./skeleton.tsx";
+import { PendingBar } from "./pending.tsx";
 
 function HomeShell({ children }: { children: ReactNode }) {
   return (
@@ -20,12 +20,10 @@ function HomeShell({ children }: { children: ReactNode }) {
   );
 }
 
-export function HomeSkeleton() {
+export function HomePending() {
   return (
     <HomeShell>
-      <div className="mt-8">
-        <ListSkeleton />
-      </div>
+      <PendingBar />
     </HomeShell>
   );
 }

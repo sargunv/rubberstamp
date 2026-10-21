@@ -9,7 +9,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { ApiError } from "./api.ts";
-import { LedgerSkeleton } from "./components/skeleton.tsx";
+import { PendingBar } from "./components/pending.tsx";
 import { meQuery } from "./queries.ts";
 import { routeTree } from "./routeTree.gen.ts";
 
@@ -38,8 +38,10 @@ const router = createRouter({
   // Hovering a link loads its data. Query decides what's fresh.
   defaultPreload: "intent",
   defaultPreloadStaleTime: 0,
-  defaultPendingMs: 150,
-  defaultPendingComponent: LedgerSkeleton,
+  // Most loads finish before this, so nothing flashes.
+  defaultPendingMs: 300,
+  defaultPendingMinMs: 200,
+  defaultPendingComponent: PendingBar,
   scrollRestoration: true,
 });
 
