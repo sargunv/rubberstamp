@@ -10,12 +10,13 @@ function Privacy() {
   return (
     <Page title="Privacy policy" width="prose">
       <Lede>
-        Rubberstamp reads what it needs to label your issues and pull requests,
-        keeps a short record of what it did, and has no ads or analytics.
+        Rubberstamp reads what it needs to label your issues and pull requests
+        and choose which CI they need, keeps a short record of what it did, and
+        has no ads or analytics.
       </Lede>
       <MetaLine className="mt-2">
         <span>
-          Effective <time dateTime="2026-10-20">October 20, 2026</time>
+          Effective <time dateTime="2026-10-21">October 21, 2026</time>
         </span>
       </MetaLine>
       <Prose>
@@ -29,8 +30,14 @@ function Privacy() {
             <code>.config/rubberstamp.yml</code>.
           </li>
           <li>
+            When its config names CI units, it also reads a pull request's
+            title, description, changed files and changes each time it opens,
+            reopens, gets new commits, or changes its base branch.
+          </li>
+          <li>
             It sends those to TypeSafe's Jev model, which judges which labels
-            fit. TypeSafe handles them under its own privacy policy.
+            fit and which CI units the changes need. TypeSafe handles them under
+            its own privacy policy.
           </li>
           <li>
             GitHub tells Rubberstamp about activity in every repository it's
@@ -49,6 +56,12 @@ function Privacy() {
             repository from it.
           </li>
           <li>
+            <b>A log of the CI it planned:</b> for each pull request commit and
+            base branch, the repository, number and title, the commit, which CI
+            units it planned, their scores or the rule that decided them, and
+            the model. Plans are deleted on the same schedule as the label log.
+          </li>
+          <li>
             <b>Previews you run in the dashboard:</b> the titles, labels and
             scores of the items previewed, and the config used. A preview is
             deleted after 60 days without anyone opening it. Uninstalling
@@ -56,7 +69,8 @@ function Privacy() {
           </li>
           <li>
             <b>How much each repository used</b> of its account's monthly
-            allowance, and which accounts have Rubberstamp installed.
+            allowance, for labels and for CI, and which accounts have
+            Rubberstamp installed.
           </li>
           <li>
             Rubberstamp doesn't keep the contents of issues, pull requests or
