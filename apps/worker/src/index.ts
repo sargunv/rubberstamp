@@ -21,7 +21,12 @@ const JobFields = {
 
 const Job = v.variant("type", [
   v.object({ type: v.literal("label"), ...JobFields }),
-  v.object({ type: v.literal("plan"), ...JobFields, head: v.string() }),
+  v.object({
+    type: v.literal("plan"),
+    ...JobFields,
+    head: v.string(),
+    base: v.string(),
+  }),
 ]);
 
 /** How long a live run's decisions are kept. */

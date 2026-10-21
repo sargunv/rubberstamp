@@ -74,7 +74,7 @@ const Pull = v.object({
   body: v.nullable(v.string()),
   state: v.string(),
   head: v.object({ sha: v.string() }),
-  base: v.object({ sha: v.string() }),
+  base: v.object({ ref: v.string(), sha: v.string() }),
   changed_files: v.number(),
 });
 

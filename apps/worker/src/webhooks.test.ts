@@ -6,17 +6,27 @@ import { webhookEffects } from "./webhooks.ts";
 const policy = { privateAllowlist: parseAllowlist("sargunv/*") };
 
 function payload(
-  overrides: { private?: boolean; owner?: string; action?: string } = {},
+  overrides: {
+    private?: boolean;
+    owner?: string;
+    action?: string;
+    changes?: object;
+  } = {},
 ) {
   return {
     action: overrides.action ?? "opened",
+    changes: overrides.changes,
     installation: { id: 7 },
     repository: {
       id: 42,
       full_name: `${overrides.owner ?? "maplibre"}/maplibre-native-ffi`,
       private: overrides.private ?? false,
     },
-    pull_request: { number: 12, head: { sha: "abc123" } },
+    pull_request: {
+      number: 12,
+      head: { sha: "abc123" },
+      base: { ref: "main" },
+    },
     issue: { number: 13 },
   };
 }
@@ -38,6 +48,7 @@ describe("webhookEffects", () => {
         repo: "maplibre/maplibre-native-ffi",
         number: 12,
         head: "abc123",
+        base: "main",
       },
     ]);
     expect(webhookEffects("issues", payload(), policy).jobs[0]?.number).toBe(
@@ -53,6 +64,18 @@ describe("webhookEffects", () => {
     expect(jobs("synchronize")).toEqual(["plan"]);
     expect(jobs("reopened")).toEqual(["plan"]);
     expect(jobs("edited")).toEqual([]);
+  });
+
+  it("plans CI again when a pull request is retargeted", () => {
+    const jobs = webhookEffects(
+      "pull_request",
+      payload({
+        action: "edited",
+        changes: { base: { ref: { from: "feature" } } },
+      }),
+      policy,
+    ).jobs;
+    expect(jobs.map((job) => job.type)).toEqual(["plan"]);
   });
 
   it("serves private repositories only on the allowlist", () => {

@@ -24,7 +24,9 @@ const PullRequestEvent = v.object({
   pull_request: v.object({
     ...Item.entries,
     head: v.object({ sha: v.string() }),
+    base: v.object({ ref: v.string() }),
   }),
+  changes: v.optional(v.object({ base: v.optional(v.unknown()) })),
 });
 
 /** Pull request actions that leave it at a head no plan has judged. */
@@ -118,7 +120,13 @@ export function webhookEffects(
       number: item.number,
     });
   }
-  if ("pull_request" in parsed.output && NEW_HEAD.has(action)) {
+  // Retargeting a pull request, as a stack does when its parent merges,
+  // changes what it would merge without changing its head.
+  if (
+    "pull_request" in parsed.output &&
+    (NEW_HEAD.has(action) ||
+      (action === "edited" && parsed.output.changes?.base !== undefined))
+  ) {
     effects.jobs.push({
       type: "plan",
       installationId: installation.id,
@@ -126,6 +134,7 @@ export function webhookEffects(
       repo: repository.full_name,
       number: item.number,
       head: parsed.output.pull_request.head.sha,
+      base: parsed.output.pull_request.base.ref,
     });
   }
   return effects;

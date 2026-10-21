@@ -24,6 +24,8 @@ export type PlanJob = {
   number: number;
   /** The head the push left the pull request at. */
   head: string;
+  /** The branch the pull request would merge into. */
+  base: string;
 };
 
 export type PlanDeps = LabelDeps;
@@ -43,7 +45,7 @@ export async function runPlanJob(
   deps: PlanDeps,
 ): Promise<PlanOutcome> {
   const { repo, store } = deps;
-  if (await store.hasPlan(job.repoId, job.number, job.head)) {
+  if (await store.hasPlan(job.repoId, job.number, job.head, job.base)) {
     return { status: "skipped", reason: "already planned" };
   }
   const file = await repo.config();
@@ -60,8 +62,8 @@ export async function runPlanJob(
   if (units.length === 0) return { status: "skipped", reason: "ci disabled" };
 
   const pull = await repo.pull(job.number);
-  // A later push queued its own plan, and the files now show that push.
-  if (pull.head.sha !== job.head) {
+  // A later push or retarget queued its own plan, and the files now show it.
+  if (pull.head.sha !== job.head || pull.base.ref !== job.base) {
     return { status: "skipped", reason: "superseded" };
   }
 
@@ -73,6 +75,7 @@ export async function runPlanJob(
     number: job.number,
     title: pull.title,
     head: pull.head.sha,
+    baseRef: pull.base.ref,
     base: pull.base.sha,
     ...judged,
   });
@@ -87,10 +90,15 @@ async function judge(
   units: Unit[],
   config: Config,
 ): Promise<Judged> {
-  const every = (rule: string): Judged => ({
+  const responses: Response[] = [];
+  const asked = () => ({
+    model: responses[0]?.model ?? null,
+    inputTokens: responses.reduce((sum, r) => sum + r.usage.input_tokens, 0),
+  });
+  // A fallback after some chunks were answered still records what they spent.
+  const fallback = (rule: string): Judged => ({
     decisions: everyUnit(units, rule),
-    model: null,
-    inputTokens: 0,
+    ...asked(),
   });
   const period = budgetPeriod(deps.now?.() ?? new Date());
   const spent = await budgetSpent(
@@ -99,7 +107,7 @@ async function judge(
     period,
     deps.budget,
   );
-  if (spent) return every(spent);
+  if (spent) return fallback(spent);
 
   const files = await deps.repo.pullFiles(job.number);
   const requests =
@@ -111,11 +119,19 @@ async function judge(
           { title: pull.title, body: pull.body, files },
           deps.model,
         );
-  if (requests === null) return every("too large to judge");
+  if (requests === null) return fallback("too large to judge");
 
-  const responses: Response[] = [];
   try {
     for (const request of requests) {
+      if (responses.length > 0) {
+        const spent = await budgetSpent(
+          deps.store,
+          job.installationId,
+          period,
+          deps.budget,
+        );
+        if (spent) return fallback(spent);
+      }
       const response = await deps.ask(request);
       await deps.store.addUsage(
         job.installationId,
@@ -129,15 +145,15 @@ async function judge(
   } catch (error) {
     // Selection only saves CI time, so any failure runs everything.
     console.error(`${job.repo}#${job.number} selection failed`, error);
-    return every("selection failed");
+    return fallback("selection failed");
   }
   const scores = unitScores(
     units,
     responses.map((r) => r.answers),
   );
+  if (scores === null) return fallback("selection failed");
   return {
     decisions: decideUnits(units, scores, changedPaths(files)),
-    model: responses[0]?.model ?? null,
-    inputTokens: responses.reduce((sum, r) => sum + r.usage.input_tokens, 0),
+    ...asked(),
   };
 }

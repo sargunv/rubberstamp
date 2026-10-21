@@ -1,7 +1,8 @@
--- Each pull request head's CI plan: whether each unit runs, and the score or
--- rule behind it. Like label runs, plans keep decisions, never states or
--- answers. The base is kept so a later plan can judge only what changed since
--- a unit last passed.
+-- The CI plan for each head and base branch of a pull request: whether each
+-- unit runs, and the score or rule behind it. Retargeting a pull request
+-- changes what it would merge without changing its head. Like label runs,
+-- plans keep decisions, never states or answers. The base commit is kept so a
+-- later plan can judge only what changed since a unit last passed.
 CREATE TABLE ci_plans (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   installation_id INTEGER NOT NULL,
@@ -10,13 +11,14 @@ CREATE TABLE ci_plans (
   number INTEGER NOT NULL,
   title TEXT NOT NULL,
   head_sha TEXT NOT NULL,
+  base_ref TEXT NOT NULL,
   base_sha TEXT NOT NULL,
   -- Null when a rule planned every unit without asking Jev.
   model TEXT,
   decisions TEXT NOT NULL,
   input_tokens INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  UNIQUE (repo_id, number, head_sha)
+  UNIQUE (repo_id, number, head_sha, base_ref)
 );
 CREATE INDEX ci_plans_repo ON ci_plans (repo, created_at);
 

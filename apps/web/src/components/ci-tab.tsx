@@ -73,15 +73,20 @@ export function CiTab({
               )
             }
             scores={
-              plan.model === null ? undefined : (
+              scored(plan) ? (
                 <UnitScores decisions={plan.decisions} />
-              )
+              ) : undefined
             }
           />
         );
       })}
     </Ledger>
   );
+}
+
+/** Whether Jev's scores decided the plan, rather than one rule for every unit. */
+function scored(plan: PlanEntry): boolean {
+  return plan.decisions.some((d) => d.score !== null);
 }
 
 function PlanMeta({ repo, plan }: { repo: string; plan: PlanEntry }) {
@@ -95,9 +100,9 @@ function PlanMeta({ repo, plan }: { repo: string; plan: PlanEntry }) {
     </Anchor>
   );
   const time = when.format(new Date(plan.createdAt));
-  // Without a model, one rule ran every unit, and it's the whole story.
+  // Without scores, one rule ran every unit, and it's the whole story.
   const rule = plan.decisions[0]?.rule;
-  return plan.model === null ? (
+  return !scored(plan) ? (
     <>
       Every unit for {commit} on {time}: {rule}
     </>

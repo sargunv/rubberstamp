@@ -130,23 +130,25 @@ export function planRequests(
   }));
 }
 
-/** Each unit's probability: the highest any chunk of the patch gave it. */
+/**
+ * Each unit's probability: the highest any chunk of the patch gave it. Null
+ * when any chunk lacks a unit's answer, since a missing answer isn't a no.
+ */
 export function unitScores(
   units: Unit[],
   answers: Record<string, Answer>[],
-): Record<string, number> {
-  return Object.fromEntries(
-    units.map((unit) => [
-      unit.id,
-      Math.max(
-        0,
-        ...answers.map((a) => {
-          const answer = a[unitQuestionKey(unit)];
-          return answer?.type === "noul" ? answer.noul : 0;
-        }),
-      ),
-    ]),
-  );
+): Record<string, number> | null {
+  const scores: Record<string, number> = {};
+  for (const unit of units) {
+    let highest = 0;
+    for (const chunk of answers) {
+      const answer = chunk[unitQuestionKey(unit)];
+      if (answer?.type !== "noul") return null;
+      highest = Math.max(highest, answer.noul);
+    }
+    scores[unit.id] = highest;
+  }
+  return scores;
 }
 
 /** The paths a change touches, including where renamed files came from. */

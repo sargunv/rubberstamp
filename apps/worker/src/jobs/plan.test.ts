@@ -22,6 +22,7 @@ const job: PlanJob = {
   repo: "o/r",
   number: 3,
   head: "abc123",
+  base: "main",
 };
 
 const pull: Issue = {
@@ -124,6 +125,15 @@ describe("runPlanJob", () => {
     expect(store.plans).toHaveLength(1);
   });
 
+  it("plans again when the pull request is retargeted at the same head", async () => {
+    const store = new FakeStore();
+    const repo = new FakeRepo(CONFIG, pull);
+    await runPlanJob(job, deps(repo, store));
+    repo.base = "release";
+    await runPlanJob({ ...job, base: "release" }, deps(repo, store));
+    expect(store.plans.map((p) => p.baseRef)).toEqual(["main", "release"]);
+  });
+
   it("does nothing without ci units", async () => {
     const store = new FakeStore();
     const outcome = await runPlanJob(
@@ -157,7 +167,7 @@ describe("runPlanJob", () => {
       body: null,
       state: "open",
       head: { sha: "abc123" },
-      base: { sha: "base123" },
+      base: { ref: "main", sha: "base123" },
       changed_files: 4000,
     });
     const store = new FakeStore();
@@ -175,5 +185,50 @@ describe("runPlanJob", () => {
     );
     expect(failing.plans[0]?.decisions.every((d) => d.run)).toBe(true);
     expect(failing.plans[0]?.decisions[0]?.rule).toBe("selection failed");
+  });
+
+  it("plans every unit when Jev leaves a unit unanswered", async () => {
+    const store = new FakeStore();
+    await runPlanJob(
+      job,
+      deps(new FakeRepo(CONFIG, pull), store, {
+        ask: async () => ({
+          model: "jev-1.13.0",
+          usage: { input_tokens: 1000 },
+          answers: { "unit:linux-x64": { type: "noul", noul: 0.9 } },
+        }),
+      }),
+    );
+    expect(store.plans[0]).toMatchObject({
+      model: "jev-1.13.0",
+      inputTokens: 1000,
+    });
+    expect(store.plans[0]?.decisions.map((d) => [d.run, d.rule])).toEqual([
+      [true, "selection failed"],
+      [true, "selection failed"],
+    ]);
+  });
+
+  it("stops asking once a chunk spends the allowance, keeping what it spent", async () => {
+    const repo = new FakeRepo(CONFIG, pull);
+    repo.files = Array.from({ length: 6 }, (_, i) => ({
+      filename: `src/${i}.cpp`,
+      status: "modified",
+      additions: 7000,
+      deletions: 0,
+      patch: "+x\n".repeat(7000),
+    }));
+    const store = new FakeStore();
+    const requests: Request[] = [];
+    await runPlanJob(
+      job,
+      deps(repo, store, {
+        ask: jev(requests),
+        budget: { installation: 1000, global: 100_000 },
+      }),
+    );
+    expect(requests).toHaveLength(1);
+    expect(store.plans[0]).toMatchObject({ inputTokens: 1000 });
+    expect(store.plans[0]?.decisions[0]?.rule).toBe("monthly budget spent");
   });
 });

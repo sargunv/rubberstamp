@@ -101,16 +101,31 @@ describe("decideUnits", () => {
 
   it("runs units at or above their threshold, using each unit's highest score", () => {
     const scores = unitScores(units, [
-      { "unit:linux-x64": { type: "noul", noul: 0.2 } },
       {
-        "unit:linux-x64": { type: "noul", noul: 0.6 },
+        "unit:linux-x64": { type: "noul", noul: 0.2 },
         "unit:macos": { type: "noul", noul: 0.1 },
       },
+      {
+        "unit:linux-x64": { type: "noul", noul: 0.6 },
+        "unit:macos": { type: "noul", noul: 0.05 },
+      },
     ]);
-    expect(decideUnits(units, scores, ["src/map.cpp"])).toEqual([
+    expect(decideUnits(units, scores ?? {}, ["src/map.cpp"])).toEqual([
       { unit: "linux-x64", threshold: 0.6, run: true, score: 0.6, rule: "" },
       { unit: "macos", threshold: 0.3, run: false, score: 0.1, rule: "" },
     ]);
+  });
+
+  it("has no scores when any chunk leaves a unit unanswered", () => {
+    expect(
+      unitScores(units, [
+        {
+          "unit:linux-x64": { type: "noul", noul: 0.6 },
+          "unit:macos": { type: "noul", noul: 0.1 },
+        },
+        { "unit:linux-x64": { type: "noul", noul: 0.6 } },
+      ]),
+    ).toBeNull();
   });
 
   it("forces a unit whose paths match a changed file, renames included", () => {

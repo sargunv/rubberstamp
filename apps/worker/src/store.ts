@@ -73,6 +73,7 @@ export type CiPlan = {
   number: number;
   title: string;
   head: string;
+  baseRef: string;
   base: string;
   model: string | null;
   decisions: UnitDecision[];
@@ -105,7 +106,12 @@ export interface Store {
     tokens: number,
   ): Promise<void>;
   saveLabelRun(run: LabelRun): Promise<void>;
-  hasPlan(repoId: number, number: number, head: string): Promise<boolean>;
+  hasPlan(
+    repoId: number,
+    number: number,
+    head: string,
+    baseRef: string,
+  ): Promise<boolean>;
   savePlan(plan: CiPlan): Promise<void>;
   saveInstallation(
     id: number,
@@ -231,23 +237,24 @@ export class CloudflareStore implements Store {
       .run();
   }
 
-  async hasPlan(repoId: number, number: number, head: string) {
+  async hasPlan(repoId: number, number: number, head: string, baseRef: string) {
     const row = await this.db
       .prepare(
-        "SELECT 1 FROM ci_plans WHERE repo_id = ? AND number = ? AND head_sha = ?",
+        "SELECT 1 FROM ci_plans WHERE repo_id = ? AND number = ? AND head_sha = ? AND base_ref = ?",
       )
-      .bind(repoId, number, head)
+      .bind(repoId, number, head, baseRef)
       .first();
     return row !== null;
   }
 
   async savePlan(plan: CiPlan) {
-    // A redelivered webhook can plan the same head twice; the first plan stands.
+    // A redelivered webhook can plan the same head and base twice; the first
+    // plan stands.
     await this.db
       .prepare(
         `INSERT OR IGNORE INTO ci_plans
-           (installation_id, repo_id, repo, number, title, head_sha, base_sha, model, decisions, input_tokens)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (installation_id, repo_id, repo, number, title, head_sha, base_ref, base_sha, model, decisions, input_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         plan.installationId,
@@ -256,6 +263,7 @@ export class CloudflareStore implements Store {
         plan.number,
         plan.title,
         plan.head,
+        plan.baseRef,
         plan.base,
         plan.model,
         JSON.stringify(plan.decisions),
