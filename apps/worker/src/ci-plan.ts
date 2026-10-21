@@ -1,4 +1,5 @@
 import {
+  ciConfigHash,
   ciUnits,
   parseConfig,
   type UnitDecision,
@@ -7,7 +8,7 @@ import * as v from "valibot";
 
 import { GitHubError, type Pull, type RepoApi } from "./github/client.ts";
 import type { PlanJob } from "./jobs/plan.ts";
-import type { Store } from "./store.ts";
+import type { PlanKey, Store } from "./store.ts";
 import { allowed, type Policy } from "./webhooks.ts";
 
 /** How long a workflow waits before asking again for a pending plan. */
@@ -61,7 +62,7 @@ export type PlanQueryDeps = {
   installationFor(fullName: string): Promise<{ id: number } | null>;
   repo(installationId: number, fullName: string): RepoApi;
   canRead(token: string, repoId: number): Promise<boolean>;
-  store: Pick<Store, "findPlan">;
+  store: Pick<Store, "findPlan" | "claim">;
   enqueue(job: PlanJob): Promise<void>;
   policy: Policy;
   /** Where the dashboard is served. */
@@ -120,12 +121,14 @@ export async function ciPlan(
     return everything("no ci units configured");
   }
 
-  const decisions = await deps.store.findPlan(
-    repository.id,
-    query.pull_request,
-    query.sha,
-    pull.base.ref,
-  );
+  const key: PlanKey = {
+    repoId: repository.id,
+    number: query.pull_request,
+    head: query.sha,
+    baseRef: pull.base.ref,
+    config: await ciConfigHash(parsed.config),
+  };
+  const decisions = await deps.store.findPlan(key);
   if (decisions !== null) {
     return {
       code: 200,
@@ -142,7 +145,15 @@ export async function ciPlan(
   if (pull.head.sha !== query.sha) {
     return everything("a newer push superseded this commit");
   }
-  if (query.start) {
+  // Anyone can ask, as often as they like, so only the first ask in a lease
+  // queues a plan. The claim is never released; it lapses.
+  const request = {
+    kind: "request",
+    repoId: key.repoId,
+    number: key.number,
+    key: `${key.head} ${key.baseRef} ${key.config}`,
+  } as const;
+  if (query.start && (await deps.store.claim(request, crypto.randomUUID()))) {
     await deps.enqueue({
       type: "plan",
       installationId: installation.id,

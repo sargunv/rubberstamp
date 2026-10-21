@@ -58,9 +58,11 @@ response=$(mktemp)
 trap 'rm -f "$response"' EXIT
 
 # Prints the HTTP status, leaving the body in $response. The token goes in
-# through stdin so it never shows in the process list.
+# through stdin so it never shows in the process list. curl restarts
+# --max-time on each retry, so both it and the retries stop at the deadline.
 ask() {
-  local body
+  local body left=$((deadline - SECONDS))
+  ((left < 1)) && left=1
   body=$(jq -nc \
     --arg repository "${GITHUB_REPOSITORY:-}" \
     --argjson pull_request "$number" \
@@ -70,7 +72,8 @@ ask() {
   if [[ -n "$token" ]]; then
     printf 'header = "Authorization: Bearer %s"\n' "$token"
   fi | curl --config - --silent --show-error \
-    --max-time 30 --retry 2 --retry-delay 2 \
+    --max-time $((left < 30 ? left : 30)) \
+    --retry 2 --retry-delay 2 --retry-max-time "$left" \
     --header 'Content-Type: application/json' \
     --data "$body" \
     --output "$response" --write-out '%{http_code}' \

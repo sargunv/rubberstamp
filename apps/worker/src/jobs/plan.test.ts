@@ -1,4 +1,9 @@
-import type { Request, Response } from "@sargunv/rubberstamp-core";
+import {
+  ciConfigHash,
+  parseConfig,
+  type Request,
+  type Response,
+} from "@sargunv/rubberstamp-core";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { Issue } from "../github/client.ts";
@@ -167,8 +172,11 @@ describe("runPlanJob", () => {
 
   it("leaves a head to the job that claimed it first", async () => {
     const store = new FakeStore();
+    const parsed = parseConfig(CONFIG);
+    if (!parsed.ok) throw new Error(parsed.errors.join("\n"));
+    const config = await ciConfigHash(parsed.config);
     await store.claim(
-      { kind: "plan", repoId: 2, number: 3, key: "abc123 main" },
+      { kind: "plan", repoId: 2, number: 3, key: `abc123 main ${config}` },
       "another job",
     );
     const requests: Request[] = [];

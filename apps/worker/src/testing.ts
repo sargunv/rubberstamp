@@ -1,7 +1,14 @@
 import type { PullFile, Request, Response } from "@sargunv/rubberstamp-core";
 
 import type { Issue, ListedItem, RepoApi } from "./github/client.ts";
-import type { CiPlan, Claim, LabelRun, Store, UsageKind } from "./store.ts";
+import type {
+  CiPlan,
+  Claim,
+  LabelRun,
+  PlanKey,
+  Store,
+  UsageKind,
+} from "./store.ts";
 
 export const CONFIG = `
 context: A C API for MapLibre Native.
@@ -131,20 +138,14 @@ export class FakeStore implements Store {
     if (this.claims.get(key) === owner) this.claims.delete(key);
   };
   plans: CiPlan[] = [];
-  hasPlan = async (_: number, __: number, head: string, baseRef: string) =>
-    this.plans.some((plan) => plan.head === head && plan.baseRef === baseRef);
-  findPlan = async (
-    repoId: number,
-    number: number,
-    head: string,
-    baseRef: string,
-  ) =>
+  findPlan = async (key: PlanKey) =>
     this.plans.find(
       (plan) =>
-        plan.repoId === repoId &&
-        plan.number === number &&
-        plan.head === head &&
-        plan.baseRef === baseRef,
+        plan.repoId === key.repoId &&
+        plan.number === key.number &&
+        plan.head === key.head &&
+        plan.baseRef === key.baseRef &&
+        plan.config === key.config,
     )?.decisions ?? null;
   savePlan = async (plan: CiPlan) => {
     this.plans.push(plan);

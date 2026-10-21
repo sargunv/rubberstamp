@@ -1,4 +1,8 @@
-import type { UnitDecision } from "@sargunv/rubberstamp-core";
+import {
+  ciConfigHash,
+  parseConfig,
+  type UnitDecision,
+} from "@sargunv/rubberstamp-core";
 import * as v from "valibot";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -67,7 +71,14 @@ function setup(
     policy: { privateAllowlist: parseAllowlist(options.allow ?? "o/*") },
     origin: "https://rubberstamp.example",
   };
-  const save = (head: string, decisions: UnitDecision[]) =>
+  // Saved under the config the repository has now, unless told otherwise.
+  const save = async (
+    head: string,
+    decisions: UnitDecision[],
+    source = CONFIG,
+  ) => {
+    const parsed = parseConfig(source);
+    if (!parsed.ok) throw new Error(parsed.errors.join("\n"));
     store.plans.push({
       installationId: 1,
       repoId: repo.repoId,
@@ -80,14 +91,16 @@ function setup(
       model: "jev-1.13.0",
       decisions,
       inputTokens: 1000,
+      config: await ciConfigHash(parsed.config),
     });
+  };
   return { repo, store, jobs, deps, save };
 }
 
 describe("ciPlan", () => {
   it("answers with the saved plan's running units", async () => {
     const { deps, save } = setup();
-    save(HEAD, judged);
+    await save(HEAD, judged);
 
     expect(await ciPlan(query(), null, deps)).toEqual({
       code: 200,
@@ -103,7 +116,7 @@ describe("ciPlan", () => {
 
   it("runs everything when one rule decided every unit", async () => {
     const { deps, save } = setup();
-    save(HEAD, [
+    await save(HEAD, [
       { unit: "linux", threshold: 0.5, run: true, score: null, rule: "x" },
       { unit: "macos", threshold: 0.5, run: true, score: null, rule: "x" },
     ]);
@@ -144,6 +157,19 @@ describe("ciPlan", () => {
     ]);
   });
 
+  it("queues one plan however often it's asked to start", async () => {
+    const { deps, jobs } = setup();
+    await ciPlan(query({ start: true }), null, deps);
+    await ciPlan(query({ start: true }), null, deps);
+    expect(jobs).toHaveLength(1);
+  });
+
+  it("doesn't follow a plan judged under an older config", async () => {
+    const { deps, save } = setup();
+    await save(HEAD, judged, `${CONFIG}    windows: { covers: Windows. }\n`);
+    expect((await ciPlan(query(), null, deps)).code).toBe(202);
+  });
+
   it("runs everything for a superseded push without planning it", async () => {
     const { deps, jobs } = setup();
 
@@ -164,7 +190,7 @@ describe("ciPlan", () => {
 
   it("still answers a superseded push that was planned", async () => {
     const { deps, save } = setup();
-    save(OLD, judged);
+    await save(OLD, judged);
 
     const reply = await ciPlan(query({ sha: OLD }), null, deps);
     expect(reply.body).toMatchObject({ status: "ready", units: ["linux"] });
@@ -188,7 +214,7 @@ describe("ciPlan", () => {
   it("needs a token that can read a private repository", async () => {
     const { deps, repo, save } = setup({ tokens: ["good"] });
     repo.private = true;
-    save(HEAD, judged);
+    await save(HEAD, judged);
 
     expect((await ciPlan(query(), null, deps)).code).toBe(401);
     expect((await ciPlan(query(), "bad", deps)).code).toBe(401);

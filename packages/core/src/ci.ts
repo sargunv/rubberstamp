@@ -11,6 +11,7 @@ import {
   type PullFile,
 } from "./describe.ts";
 import { glob } from "./glob.ts";
+import { hashJson } from "./hash.ts";
 import type { Answer, Json, Question, Request } from "./jev.ts";
 
 export const DEFAULT_CI_THRESHOLD = 0.5;
@@ -53,6 +54,17 @@ export function ciUnits(config: Config): Unit[] {
     paths: unit.paths,
     threshold: unit.threshold ?? section.threshold ?? DEFAULT_CI_THRESHOLD,
   }));
+}
+
+/**
+ * Identifies everything in the config that shapes a plan: the shared context
+ * and the ci section. A plan judged under another config doesn't hold.
+ */
+export async function ciConfigHash(config: Config): Promise<string> {
+  const material: Json = JSON.parse(
+    JSON.stringify({ context: config.context ?? null, ci: config.ci ?? null }),
+  );
+  return (await hashJson(material)).slice(0, 16);
 }
 
 export function unitQuestionKey(unit: Unit): string {
