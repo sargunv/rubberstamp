@@ -16,15 +16,8 @@ export const Route = createFileRoute("/$owner/$repo/log")({
   },
   pendingComponent: LedgerSkeleton,
   component: function Log() {
-    const { repo, status, colors } = useReadyRepo();
+    const { repo, colors } = useReadyRepo();
     const { data } = useSuspenseQuery(logQuery(repo));
-    return (
-      <LogTab
-        repo={repo}
-        entries={data.entries}
-        groups={status.config.groups}
-        colors={colors}
-      />
-    );
+    return <LogTab repo={repo} entries={data.entries} colors={colors} />;
   },
 });

@@ -1,8 +1,9 @@
 import { Collapsible } from "@base-ui/react/collapsible";
 import type { ReactNode } from "react";
 
-import type { Group } from "../preview.ts";
+import { requirement, type Group } from "../preview.ts";
 import { Chevron } from "./header.tsx";
+import { DescribedLabel } from "./label.tsx";
 
 export const date = new Intl.DateTimeFormat("en", {
   month: "short",
@@ -46,6 +47,7 @@ export function LedgerRow({
   labels,
   groups,
   decisions,
+  colors,
 }: {
   number: number;
   url: string;
@@ -58,6 +60,8 @@ export function LedgerRow({
   /** Without groups, the row has no scores to show. */
   groups?: Group[];
   decisions?: Decision[];
+  /** Label colors by name, for the scores. */
+  colors?: Map<string, string>;
 }) {
   return (
     <Collapsible.Root
@@ -72,7 +76,10 @@ export function LedgerRow({
       </div>
 
       <div className="flex min-w-0 gap-2 py-4 pr-4 pl-5">
-        <span className="mt-0.5">{icon}</span>
+        {/* The title's first line box, so the icon centers on it. */}
+        <span className="flex h-[1.375rem] shrink-0 items-center pt-px">
+          {icon}
+        </span>
         <div className="min-w-0">
           <a
             href={url}
@@ -104,6 +111,7 @@ export function LedgerRow({
                   key={g.id}
                   group={g}
                   decisions={decisions.filter((d) => d.group === g.id)}
+                  colors={colors ?? new Map()}
                 />
               ))}
             </div>
@@ -117,10 +125,13 @@ export function LedgerRow({
 function GroupScores({
   group,
   decisions,
+  colors,
 }: {
   group: Group;
   decisions: Decision[];
+  colors: Map<string, string>;
 }) {
+  const meanings = new Map(group.labels.map((l) => [l.name, l.meaning]));
   const sorted = decisions.toSorted((a, b) => b.score - a.score);
   const note =
     sorted.find((d) => d.add && d.rule)?.rule ??
@@ -131,19 +142,21 @@ function GroupScores({
       <h3 className="flex items-baseline justify-between gap-3 border-b border-rule pb-1">
         <span className="font-mono text-sm font-medium">{group.id}</span>
         <span className="text-xs text-muted">
-          passes at {group.threshold.toFixed(2)}
+          {requirement(group)} · threshold {group.threshold.toFixed(2)}
         </span>
       </h3>
       <ul className="mt-2 space-y-1.5">
         {sorted.map((d) => (
           <li
             key={d.label}
-            className="grid grid-cols-[minmax(0,8rem)_1fr_2.5rem] items-center gap-3 text-xs"
+            className="grid grid-cols-[minmax(0,9rem)_1fr_2.5rem] items-center gap-3 text-xs"
           >
-            <span
-              className={`truncate font-mono ${d.add ? "font-semibold" : "text-muted"}`}
-            >
-              {d.label}
+            <span className={`min-w-0 ${d.add ? "" : "opacity-55"}`}>
+              <DescribedLabel
+                name={d.label}
+                color={colors.get(d.label) ?? "ededed"}
+                meaning={meanings.get(d.label) ?? "No description"}
+              />
             </span>
             <span className="relative h-1.5 rounded-full bg-rule">
               <span

@@ -1,3 +1,5 @@
+import { Tooltip } from "@base-ui/react/tooltip";
+
 import type { LabelChange } from "../preview.ts";
 
 /** Black or white text, whichever reads better on the label's color. */
@@ -9,10 +11,18 @@ function textOn(hex: string): string {
 }
 
 /** A label as GitHub draws it. */
-export function Label({ name, color }: { name: string; color: string }) {
+export function Label({
+  name,
+  color,
+  className = "",
+}: {
+  name: string;
+  color: string;
+  className?: string;
+}) {
   return (
     <span
-      className="label"
+      className={`label ${className}`}
       style={{ "--label": `#${color}`, "--label-text": textOn(color) }}
     >
       {name}
@@ -69,5 +79,44 @@ export function LabelDiff({
             : ""}
       </span>
     </span>
+  );
+}
+
+/** A label that shows the description Jev reads when hovered or focused. */
+export function DescribedLabel({
+  name,
+  color,
+  meaning,
+  fromConfig,
+  className = "",
+}: {
+  name: string;
+  color: string;
+  meaning: string;
+  /** Where the description comes from, when that's known. */
+  fromConfig?: boolean;
+  className?: string;
+}) {
+  return (
+    <Tooltip.Root>
+      <Tooltip.Trigger
+        render={<span tabIndex={0} />}
+        className={`inline-flex max-w-full rounded-full ${className}`}
+      >
+        <Label name={name} color={color} className="max-w-full truncate" />
+      </Tooltip.Trigger>
+      <Tooltip.Portal>
+        <Tooltip.Positioner sideOffset={6}>
+          <Tooltip.Popup className="max-w-sm rounded-[3px] border border-rule bg-sheet px-3 py-2 text-sm shadow-[0_8px_24px_-12px_rgb(0_0_0/0.35)] transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0">
+            {meaning}
+            {fromConfig === undefined ? null : (
+              <span className="mt-1 block text-xs text-muted">
+                {fromConfig ? "From describe in the config" : "From GitHub"}
+              </span>
+            )}
+          </Tooltip.Popup>
+        </Tooltip.Positioner>
+      </Tooltip.Portal>
+    </Tooltip.Root>
   );
 }

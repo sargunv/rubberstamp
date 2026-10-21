@@ -3,52 +3,8 @@ import { parseConfig } from "@sargunv/rubberstamp-core";
 import { useState } from "react";
 
 import type { Group } from "../preview.ts";
-import { Label } from "./label.tsx";
-
-/** How many labels a group takes, in words. */
-function requirement(group: Group): string {
-  const { min, max } = group;
-  if (max === 1) return min > 0 ? "Exactly one" : "At most one";
-  if (min > 0 && max !== undefined) return `${min} to ${max}`;
-  if (min > 1) return `At least ${min}`;
-  if (min === 1) return "At least one";
-  if (max !== undefined) return `Up to ${max}`;
-  return group.labels.length === 1 ? "Optional" : "Any";
-}
-
-/** A label that shows the description Jev reads when hovered or focused. */
-function DescribedLabel({
-  name,
-  color,
-  meaning,
-  fromConfig,
-}: {
-  name: string;
-  color: string;
-  meaning: string;
-  fromConfig: boolean;
-}) {
-  return (
-    <Tooltip.Root>
-      <Tooltip.Trigger
-        render={<span tabIndex={0} />}
-        className="inline-flex rounded-full"
-      >
-        <Label name={name} color={color} />
-      </Tooltip.Trigger>
-      <Tooltip.Portal>
-        <Tooltip.Positioner sideOffset={6}>
-          <Tooltip.Popup className="max-w-sm rounded-[3px] border border-rule bg-sheet px-3 py-2 text-sm shadow-[0_8px_24px_-12px_rgb(0_0_0/0.35)] transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0">
-            {meaning}
-            <span className="mt-1 block text-xs text-muted">
-              {fromConfig ? "From describe in the config" : "From GitHub"}
-            </span>
-          </Tooltip.Popup>
-        </Tooltip.Positioner>
-      </Tooltip.Portal>
-    </Tooltip.Root>
-  );
-}
+import { requirement } from "../preview.ts";
+import { DescribedLabel } from "./label.tsx";
 
 /** The config's context, two lines until expanded. */
 function Context({ text }: { text: string }) {

@@ -10,6 +10,7 @@ import { Link } from "@tanstack/react-router";
 import { useState, type CSSProperties, type ReactNode } from "react";
 
 import { percent } from "../format.ts";
+import { GitHubLink } from "./github-link.tsx";
 import { Chevron, Header } from "./header.tsx";
 import { LabelDiff } from "./label.tsx";
 import { Ledger, LedgerRow } from "./ledger.tsx";
@@ -53,9 +54,15 @@ function Shell({ owner, children }: { owner: string; children: ReactNode }) {
     <>
       <Header owner={owner} />
       <main className="mx-auto max-w-6xl px-5 pt-10 pb-24 sm:px-8">
-        <h1 className="font-display text-5xl leading-none font-extrabold tracking-[0.01em] sm:text-6xl">
-          {owner}
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="font-display text-5xl leading-none font-extrabold tracking-[0.01em] sm:text-6xl">
+            {owner}
+          </h1>
+          <GitHubLink
+            href={`https://github.com/${owner}`}
+            label={`${owner} on GitHub`}
+          />
+        </div>
         {children}
       </main>
     </>
@@ -329,12 +336,12 @@ function RepoTable({
     <table className="mt-3 w-full table-fixed border-t border-rule text-sm">
       <thead className="text-left text-xs text-muted">
         <tr className="border-b border-rule">
-          <th className="py-2 font-normal">Repository</th>
-          <th className="w-20 py-2 text-right font-normal">Share</th>
-          <th className="hidden w-24 py-2 text-right font-normal sm:table-cell">
+          <th className="py-2 pr-3 pl-3 font-normal">Repository</th>
+          <th className="w-24 px-3 py-2 text-right font-normal">Share</th>
+          <th className="hidden w-28 px-3 py-2 text-right font-normal sm:table-cell">
             Labeled
           </th>
-          <th className="hidden w-32 py-2 text-right font-normal sm:table-cell">
+          <th className="hidden w-36 px-3 py-2 text-right font-normal sm:table-cell">
             Last labeled
           </th>
         </tr>
@@ -352,7 +359,7 @@ function RepoTable({
               onMouseLeave={() => onHover(null)}
               className={`border-b border-rule ${hovered === repo.name ? "bg-sheet" : ""}`}
             >
-              <td className="py-2.5">
+              <td className="px-3 py-2.5">
                 <Link
                   to="/$owner/$repo"
                   params={{ owner, repo: name }}
@@ -360,9 +367,10 @@ function RepoTable({
                   onBlur={() => onHover(null)}
                   className="flex items-center gap-2.5 rounded-[2px] font-mono hover:text-violet"
                 >
+                  {/* Each repository's ink on the strip; none when it spent nothing. */}
                   <span
                     aria-hidden
-                    className="size-2.5 shrink-0 rounded-[2px] border border-rule"
+                    className="size-2.5 shrink-0 rounded-[2px]"
                     style={swatch}
                   />
                   {name}
@@ -375,13 +383,13 @@ function RepoTable({
                   ) : null}
                 </Link>
               </td>
-              <td className="py-2.5 text-right font-mono tabular-nums">
-                {percent(repo.share)}
+              <td className="px-3 py-2.5 text-right font-mono tabular-nums">
+                {repo.share > 0 ? percent(repo.share) : "—"}
               </td>
-              <td className="hidden py-2.5 text-right font-mono tabular-nums sm:table-cell">
+              <td className="hidden px-3 py-2.5 text-right font-mono tabular-nums sm:table-cell">
                 {repo.labeled}
               </td>
-              <td className="hidden py-2.5 text-right text-muted sm:table-cell">
+              <td className="hidden px-3 py-2.5 text-right text-muted sm:table-cell">
                 {repo.lastLabeledAt
                   ? day.format(new Date(repo.lastLabeledAt))
                   : "—"}

@@ -96,6 +96,8 @@ export const LogEntry = v.object({
     }),
   ),
   added: v.array(v.string()),
+  /** The label groups the item was judged with, as they were then. */
+  groups: v.array(PreviewGroup),
   inputTokens: v.number(),
   createdAt: v.string(),
 });

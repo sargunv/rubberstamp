@@ -45,6 +45,11 @@ describe("runLabelJob", () => {
       model: "jev-1.13.0",
       added: ["bug", "area:map"],
     });
+    // The log keeps the groups as judged, so a later config can't rewrite it.
+    expect(store.runs[0]?.groups.map((g) => [g.id, g.threshold])).toEqual([
+      ["kind", 0.5],
+      ["area", 0.8],
+    ]);
   });
 
   it("respects labels someone set while Jev judged", async () => {
@@ -104,6 +109,7 @@ function storeRun(): LabelRun {
     title: "",
     type: "issue",
     model: "",
+    groups: [],
     decisions: [],
     added: [],
     inputTokens: 0,

@@ -50,3 +50,14 @@ export function changeCount(diff: LabelChange[]) {
     dropped: diff.filter((d) => d.change === "dropped").length,
   };
 }
+
+/** How many labels a group takes, in words. */
+export function requirement(group: Group): string {
+  const { min, max } = group;
+  if (max === 1) return min > 0 ? "Exactly one" : "At most one";
+  if (min > 0 && max !== undefined) return `${min} to ${max}`;
+  if (min > 1) return `At least ${min}`;
+  if (min === 1) return "At least one";
+  if (max !== undefined) return `Up to ${max}`;
+  return group.labels.length === 1 ? "Optional" : "Any";
+}

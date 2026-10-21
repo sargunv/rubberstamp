@@ -226,6 +226,7 @@ function PreviewRow({
       }
       groups={preview.groups}
       decisions={item.decisions}
+      colors={colors}
     />
   );
 }

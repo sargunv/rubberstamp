@@ -2,6 +2,7 @@ import type { RepoStatus } from "@sargunv/rubberstamp-core";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { GitHubLink } from "./github-link.tsx";
 import { Header } from "./header.tsx";
 
 /** A repository's header, name, and tabs, around a tab's content. */
@@ -19,10 +20,16 @@ export function RepoShell({
     <>
       <Header repo={repo} />
       <main className="mx-auto max-w-6xl px-5 pt-10 pb-24 sm:px-8">
-        <h1 className="font-display text-5xl leading-none font-extrabold tracking-[0.01em] sm:text-6xl">
-          <span className="text-muted">{owner}/</span>
-          {name}
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="font-display text-5xl leading-none font-extrabold tracking-[0.01em] sm:text-6xl">
+            <span className="text-muted">{owner}/</span>
+            {name}
+          </h1>
+          <GitHubLink
+            href={`https://github.com/${repo}`}
+            label={`${repo} on GitHub`}
+          />
+        </div>
         {tabs ? (
           <nav
             aria-label="Repository"

@@ -2,6 +2,7 @@ import {
   LogEntry,
   type ActivityEntry,
   type LabelDecision,
+  type PreviewGroup,
 } from "@sargunv/rubberstamp-core";
 import * as v from "valibot";
 
@@ -19,6 +20,7 @@ const RunRow = v.pipe(
     model: v.string(),
     decisions: v.string(),
     added: v.string(),
+    groups: v.string(),
     input_tokens: v.number(),
     created_at: v.string(),
   }),
@@ -29,6 +31,7 @@ const RunRow = v.pipe(
     model: row.model,
     decisions: JSON.parse(row.decisions),
     added: JSON.parse(row.added),
+    groups: JSON.parse(row.groups),
     inputTokens: row.input_tokens,
     createdAt: sqliteTime(row.created_at),
   })),
@@ -43,6 +46,7 @@ export type LabelRun = {
   title: string;
   type: "issue" | "pull request";
   model: string;
+  groups: PreviewGroup[];
   decisions: LabelDecision[];
   added: string[];
   inputTokens: number;
@@ -146,7 +150,7 @@ export class CloudflareStore implements Store {
   ): Promise<ActivityEntry[]> {
     const { results } = await this.db
       .prepare(
-        `SELECT repo, number, title, type, model, decisions, added, input_tokens, created_at
+        `SELECT repo, number, title, type, model, decisions, added, groups, input_tokens, created_at
          FROM label_runs WHERE installation_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
       )
       .bind(installationId, limit)
@@ -185,8 +189,8 @@ export class CloudflareStore implements Store {
     await this.db
       .prepare(
         `INSERT INTO label_runs
-           (installation_id, repo_id, repo, number, title, type, model, decisions, added, input_tokens)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (installation_id, repo_id, repo, number, title, type, model, decisions, added, groups, input_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         run.installationId,
@@ -198,6 +202,7 @@ export class CloudflareStore implements Store {
         run.model,
         JSON.stringify(run.decisions),
         JSON.stringify(run.added),
+        JSON.stringify(run.groups),
         run.inputTokens,
       )
       .run();
@@ -220,7 +225,7 @@ export class CloudflareStore implements Store {
   async recentRuns(repo: string, limit: number): Promise<LogEntry[]> {
     const { results } = await this.db
       .prepare(
-        `SELECT number, title, type, model, decisions, added, input_tokens, created_at
+        `SELECT number, title, type, model, decisions, added, groups, input_tokens, created_at
          FROM label_runs WHERE repo = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
       )
       .bind(repo, limit)

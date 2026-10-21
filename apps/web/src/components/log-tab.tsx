@@ -1,7 +1,6 @@
 import { GitPullRequestIcon, IssueOpenedIcon } from "@primer/octicons-react";
 import type { LogEntry } from "@sargunv/rubberstamp-core";
 
-import type { Group } from "../preview.ts";
 import { LabelDiff } from "./label.tsx";
 import { Ledger, LedgerRow } from "./ledger.tsx";
 
@@ -16,12 +15,10 @@ const when = new Intl.DateTimeFormat("en", {
 export function LogTab({
   repo,
   entries,
-  groups,
   colors,
 }: {
   repo: string;
   entries: LogEntry[];
-  groups: Group[];
   colors: Map<string, string>;
 }) {
   if (entries.length === 0) {
@@ -65,8 +62,9 @@ export function LogTab({
               ))
             )
           }
-          groups={groups}
+          groups={entry.groups}
           decisions={entry.decisions}
+          colors={colors}
         />
       ))}
     </Ledger>
