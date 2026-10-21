@@ -1,5 +1,6 @@
 import {
   changedPaths,
+  ciConfigHash,
   ciUnits,
   decideUnits,
   everyUnit,
@@ -15,6 +16,7 @@ import {
 
 import { budgetPeriod, budgetSpent } from "../budget.ts";
 import type { Pull } from "../github/client.ts";
+import type { PlanKey } from "../store.ts";
 import { claimed } from "./claim.ts";
 import type { LabelDeps } from "./label.ts";
 
@@ -49,9 +51,6 @@ export async function runPlanJob(
   deps: PlanDeps,
 ): Promise<PlanOutcome> {
   const { repo, store } = deps;
-  if (await store.hasPlan(job.repoId, job.number, job.head, job.base)) {
-    return { status: "skipped", reason: "already planned" };
-  }
   const file = await repo.config();
   if (file === null) return { status: "skipped", reason: "no config" };
   const parsed = parseConfig(file.source);
@@ -64,6 +63,16 @@ export async function runPlanJob(
   }
   const units = ciUnits(parsed.config);
   if (units.length === 0) return { status: "skipped", reason: "ci disabled" };
+  const key: PlanKey = {
+    repoId: job.repoId,
+    number: job.number,
+    head: job.head,
+    baseRef: job.base,
+    config: await ciConfigHash(parsed.config),
+  };
+  if ((await store.findPlan(key)) !== null) {
+    return { status: "skipped", reason: "already planned" };
+  }
 
   // A later push or retarget queued its own plan. The files show whatever the
   // pull request is now, so it must be the same before and after reading them.
@@ -84,7 +93,7 @@ export async function runPlanJob(
       kind: "plan",
       repoId: job.repoId,
       number: job.number,
-      key: `${job.head} ${job.base}`,
+      key: `${job.head} ${job.base} ${key.config}`,
     },
     async (): Promise<PlanOutcome> => {
       const judged = await judge(job, deps, pull, files, units, parsed.config);
@@ -102,6 +111,7 @@ export async function runPlanJob(
         head: pull.head.sha,
         baseRef: pull.base.ref,
         base: pull.base.sha,
+        config: key.config,
         ...judged,
       });
       return { status: "planned", decisions: judged.decisions };

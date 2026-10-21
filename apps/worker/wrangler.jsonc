@@ -31,7 +31,7 @@
   "assets": {
     "directory": "../web/dist",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/auth/*", "/webhooks/*"]
+    "run_worker_first": ["/api/*", "/auth/*", "/ci/*", "/webhooks/*"]
   },
   "durable_objects": {
     "bindings": [{ "name": "PREVIEWS", "class_name": "RepoPreviews" }]

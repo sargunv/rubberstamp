@@ -75,11 +75,27 @@ const Pull = v.object({
   body: v.nullable(v.string()),
   state: v.string(),
   head: v.object({ sha: v.string() }),
-  base: v.object({ ref: v.string(), sha: v.string() }),
+  base: v.object({
+    ref: v.string(),
+    sha: v.string(),
+    repo: v.object({
+      id: v.number(),
+      full_name: v.string(),
+      private: v.boolean(),
+    }),
+  }),
   changed_files: v.number(),
 });
 
 export type Pull = v.InferOutput<typeof Pull>;
+
+const Repository = v.object({
+  id: v.number(),
+  full_name: v.string(),
+  private: v.boolean(),
+});
+
+export type Repository = v.InferOutput<typeof Repository>;
 
 export type ConfigFile = { path: string; source: string };
 
@@ -110,6 +126,8 @@ export interface RepoApi {
   /** The newest issues and pull requests, newest first. */
   recentItems(count: number): Promise<ListedItem[]>;
   issue(number: number): Promise<Issue>;
+  /** The repository itself: its id, canonical name, and visibility. */
+  repository(): Promise<Repository>;
   pull(number: number): Promise<Pull>;
   /** A pull request's changed files, up to the first thousand. */
   pullFiles(number: number): Promise<PullFile[]>;
@@ -206,6 +224,21 @@ export class GitHubApp {
     return { id: installation.id, account: installation.account.login };
   }
 
+  /**
+   * Whether a caller's token, such as a workflow's, can read a repository.
+   * Asking by id keeps a renamed or recreated name from answering instead.
+   */
+  async canRead(token: string, repoId: number): Promise<boolean> {
+    const send = this.request(async () => token);
+    const path = `/repositories/${repoId}`;
+    const response = await send("GET", path);
+    if ([401, 403, 404].includes(response.status)) return false;
+    if (!response.ok) {
+      throw new GitHubError(response.status, path, await response.text());
+    }
+    return true;
+  }
+
   /** Calls made as a signed-in user, with their user access token. */
   user(token: string): UserApi {
     return new UserClient(this.request(async () => token));
@@ -283,6 +316,10 @@ class RepoClient implements RepoApi {
 
   issue(number: number): Promise<Issue> {
     return this.json(Issue, "GET", `/repos/${this.fullName}/issues/${number}`);
+  }
+
+  repository(): Promise<Repository> {
+    return this.json(Repository, "GET", `/repos/${this.fullName}`);
   }
 
   pull(number: number): Promise<Pull> {

@@ -1,11 +1,11 @@
 import {
   LogEntry,
   PlanEntry,
+  UnitDecision,
   type ActivityEntry,
   type ActivityItem,
   type LabelDecision,
   type PreviewGroup,
-  type UnitDecision,
 } from "@sargunv/rubberstamp-core";
 import * as v from "valibot";
 
@@ -98,7 +98,7 @@ function activityItem(row: Record<string, unknown>): ActivityItem {
 
 /** Work a job reserves before spending on it. */
 export type Claim = {
-  kind: "label" | "plan";
+  kind: "label" | "plan" | "request";
   repoId: number;
   number: number;
   key: string;
@@ -114,7 +114,18 @@ export const CLAIM_MINUTES = 2;
 /** What spent Jev usage, within the same allowance. */
 export type UsageKind = "labels" | "ci";
 
+/** What a plan is for: one head and base of a pull request, under one config. */
+export type PlanKey = {
+  repoId: number;
+  number: number;
+  head: string;
+  baseRef: string;
+  /** The `ciConfigHash` of the config it was judged under. */
+  config: string;
+};
+
 export type CiPlan = {
+  config: string;
   installationId: number;
   repoId: number;
   repo: string;
@@ -158,12 +169,8 @@ export interface Store {
   claim(claim: Claim, owner: string): Promise<boolean>;
   /** Release the claim if `owner` still holds it. */
   release(claim: Claim, owner: string): Promise<void>;
-  hasPlan(
-    repoId: number,
-    number: number,
-    head: string,
-    baseRef: string,
-  ): Promise<boolean>;
+  /** A plan's decisions, or null if there's none for that key yet. */
+  findPlan(key: PlanKey): Promise<UnitDecision[] | null>;
   savePlan(plan: CiPlan): Promise<void>;
   saveInstallation(
     id: number,
@@ -319,24 +326,26 @@ export class CloudflareStore implements Store {
       .run();
   }
 
-  async hasPlan(repoId: number, number: number, head: string, baseRef: string) {
-    const row = await this.db
+  async findPlan(key: PlanKey): Promise<UnitDecision[] | null> {
+    const decisions = await this.db
       .prepare(
-        "SELECT 1 FROM ci_plans WHERE repo_id = ? AND number = ? AND head_sha = ? AND base_ref = ?",
+        `SELECT decisions FROM ci_plans
+         WHERE repo_id = ? AND number = ? AND head_sha = ? AND base_ref = ? AND config = ?`,
       )
-      .bind(repoId, number, head, baseRef)
-      .first();
-    return row !== null;
+      .bind(key.repoId, key.number, key.head, key.baseRef, key.config)
+      .first<string>("decisions");
+    return decisions === null
+      ? null
+      : v.parse(v.array(UnitDecision), JSON.parse(decisions));
   }
 
   async savePlan(plan: CiPlan) {
-    // A redelivered webhook can plan the same head and base twice; the first
-    // plan stands.
+    // A redelivered webhook can plan the same key twice; the first plan stands.
     await this.db
       .prepare(
         `INSERT OR IGNORE INTO ci_plans
-           (installation_id, repo_id, repo, number, title, head_sha, base_ref, base_sha, model, decisions, input_tokens)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (installation_id, repo_id, repo, number, title, head_sha, base_ref, base_sha, config, model, decisions, input_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         plan.installationId,
@@ -347,6 +356,7 @@ export class CloudflareStore implements Store {
         plan.head,
         plan.baseRef,
         plan.base,
+        plan.config,
         plan.model,
         JSON.stringify(plan.decisions),
         plan.inputTokens,

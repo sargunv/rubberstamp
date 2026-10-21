@@ -1,7 +1,14 @@
 import type { PullFile, Request, Response } from "@sargunv/rubberstamp-core";
 
 import type { Issue, ListedItem, RepoApi } from "./github/client.ts";
-import type { CiPlan, Claim, LabelRun, Store, UsageKind } from "./store.ts";
+import type {
+  CiPlan,
+  Claim,
+  LabelRun,
+  PlanKey,
+  Store,
+  UsageKind,
+} from "./store.ts";
 
 export const CONFIG = `
 context: A C API for MapLibre Native.
@@ -62,6 +69,8 @@ export class FakeRepo implements RepoApi {
   /** The pull request's head and files, which a test may change. */
   head = "abc123";
   base = "main";
+  repoId = 2;
+  private = false;
   files: PullFile[] = [
     {
       filename: "src/map.cpp",
@@ -71,12 +80,25 @@ export class FakeRepo implements RepoApi {
       patch: "@@ -1 +1 @@\n-a\n+b",
     },
   ];
+  repository = async () => ({
+    id: this.repoId,
+    full_name: this.fullName,
+    private: this.private,
+  });
   pull = async () => ({
     title: this.item.title,
     body: this.item.body,
     state: this.item.state,
     head: { sha: this.head },
-    base: { ref: this.base, sha: "base123" },
+    base: {
+      ref: this.base,
+      sha: "base123",
+      repo: {
+        id: this.repoId,
+        full_name: this.fullName,
+        private: this.private,
+      },
+    },
     changed_files: this.files.length,
   });
   pullFiles = async () => this.files;
@@ -121,8 +143,15 @@ export class FakeStore implements Store {
     if (this.claims.get(key) === owner) this.claims.delete(key);
   };
   plans: CiPlan[] = [];
-  hasPlan = async (_: number, __: number, head: string, baseRef: string) =>
-    this.plans.some((plan) => plan.head === head && plan.baseRef === baseRef);
+  findPlan = async (key: PlanKey) =>
+    this.plans.find(
+      (plan) =>
+        plan.repoId === key.repoId &&
+        plan.number === key.number &&
+        plan.head === key.head &&
+        plan.baseRef === key.baseRef &&
+        plan.config === key.config,
+    )?.decisions ?? null;
   savePlan = async (plan: CiPlan) => {
     this.plans.push(plan);
   };
