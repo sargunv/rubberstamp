@@ -14,7 +14,9 @@ export function Wordmark({ className = "" }: { className?: string }) {
   );
 }
 
-export function Header({ repo }: { repo?: string }) {
+/** The site header, showing the account and repository a page is about. */
+export function Header({ owner, repo }: { owner?: string; repo?: string }) {
+  const account = repo?.split("/")[0] ?? owner;
   const me = useQuery(meQuery).data;
   const signOut = useSignOut();
   return (
@@ -23,7 +25,34 @@ export function Header({ repo }: { repo?: string }) {
         <Link to="/" aria-label="Rubberstamp home" className="rounded-[3px]">
           <Wordmark />
         </Link>
-        {repo ? <RepoSwitcher repo={repo} /> : null}
+        {account ? (
+          <nav
+            aria-label="Breadcrumb"
+            className="flex min-w-0 items-center font-mono text-sm"
+          >
+            {repo ? (
+              <Link
+                to="/$owner"
+                params={{ owner: account }}
+                className="rounded-[3px] px-1 py-1 text-muted hover:text-ink hover:underline"
+              >
+                {account}
+              </Link>
+            ) : (
+              <span aria-current="page" className="px-1 py-1">
+                {account}
+              </span>
+            )}
+            {repo ? (
+              <>
+                <span aria-hidden className="text-muted">
+                  /
+                </span>
+                <RepoSwitcher repo={repo} />
+              </>
+            ) : null}
+          </nav>
+        ) : null}
         <div className="ml-auto flex items-center gap-3">
           {me ? (
             <img
@@ -64,9 +93,9 @@ function RepoSwitcher({ repo }: { repo: string }) {
     >
       <Combobox.Trigger
         aria-label="Switch repository"
-        className="flex min-w-0 items-center gap-1.5 rounded-[3px] px-2 py-1 font-mono text-sm text-ink hover:bg-sheet data-popup-open:bg-sheet"
+        className="flex min-w-0 items-center gap-1.5 rounded-[3px] px-1.5 py-1 text-ink hover:bg-sheet data-popup-open:bg-sheet"
       >
-        <span className="truncate">{repo}</span>
+        <span className="truncate">{repo.split("/")[1]}</span>
         <Chevron />
       </Combobox.Trigger>
       <Combobox.Portal>

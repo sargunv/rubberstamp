@@ -81,7 +81,7 @@ export class FakeStore implements Store {
   usage = async () => this.spent;
   globalSpent = 0;
   globalUsage = async () => this.globalSpent;
-  addUsage = async (_: number, __: string, tokens: number) => {
+  addUsage = async (_: number, __: string, ___: string, tokens: number) => {
     this.spent += tokens;
   };
   saveLabelRun = async (run: LabelRun) => {

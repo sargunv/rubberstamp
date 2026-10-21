@@ -104,6 +104,7 @@ export class RepoPreviews extends DurableObject<Env> {
     await store.addUsage(
       target.installationId,
       period,
+      target.repo,
       result.preview.inputTokens,
     );
     await this.ctx.storage.put("preview", result.preview);

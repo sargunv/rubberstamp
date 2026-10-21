@@ -12,6 +12,7 @@ import { useNavigate } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import {
+  getAccount,
   getLog,
   getMe,
   getPreview,
@@ -32,6 +33,12 @@ export const reposQuery = queryOptions({
   queryKey: ["repos"],
   queryFn: getRepos,
 });
+
+export const accountQuery = (owner: string) =>
+  queryOptions({
+    queryKey: ["account", owner.toLowerCase()],
+    queryFn: () => getAccount(owner),
+  });
 
 export const repoQuery = (repo: string) =>
   queryOptions({
@@ -71,14 +78,8 @@ export function useRunPreview(repo: string) {
     onMutate: () => queryClient.removeQueries({ queryKey: progressKey(repo) }),
     onSuccess: async (result) => {
       if (!result.ok) return;
-      queryClient.setQueryData(previewQuery(repo).queryKey, {
-        preview: result.preview,
-      });
-      // The run spent from the budget the repository's status shows.
-      await queryClient.invalidateQueries({
-        queryKey: repoQuery(repo).queryKey,
-        exact: true,
-      });
+      // The new preview and what it spent from the allowance.
+      await queryClient.invalidateQueries({ queryKey: ["repo", repo] });
     },
   });
   const running = useIsMutating({ mutationKey: previewMutationKey(repo) }) > 0;

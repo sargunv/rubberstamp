@@ -88,7 +88,12 @@ export async function runLabelJob(
         };
   const request = labelRequest(config, groups, item, deps.model);
   const response = await deps.ask(request);
-  await store.addUsage(job.installationId, period, response.usage.input_tokens);
+  await store.addUsage(
+    job.installationId,
+    period,
+    job.repo,
+    response.usage.input_tokens,
+  );
 
   const scores = labelScores(groups, response.answers);
   // Read the labels again in case someone labeled the item while Jev judged it.

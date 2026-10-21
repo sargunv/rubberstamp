@@ -223,3 +223,12 @@ html {
   border-left: 1px solid var(--margin);
   pointer-events: none;
 }
+
+/* Usage from before it was counted per repository: spent, but by no one. */
+.unattributed {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--rule) 0 3px,
+    transparent 3px 6px
+  );
+}

@@ -32,18 +32,25 @@ const TITLE = {
 export function LabelDiff({
   change,
   color,
+  done = false,
 }: {
   change: LabelChange;
   color: string;
+  /** Whether Rubberstamp already added it, as in a log, rather than would. */
+  done?: boolean;
 }) {
+  const title =
+    done && change.change === "added"
+      ? "Rubberstamp added this"
+      : TITLE[change.change];
   return (
     <span
       className="label-change"
       data-change={change.change}
       title={
         change.rule === "filled to min"
-          ? `${TITLE.added}, to meet the group's minimum`
-          : TITLE[change.change]
+          ? `${title}, to meet the group's minimum`
+          : title
       }
     >
       {change.change === "added" || change.change === "dropped" ? (
@@ -54,7 +61,9 @@ export function LabelDiff({
       <Label name={change.name} color={color} />
       <span className="sr-only">
         {change.change === "added"
-          ? " (would add)"
+          ? done
+            ? " (added)"
+            : " (would add)"
           : change.change === "dropped"
             ? " (wouldn't add)"
             : ""}

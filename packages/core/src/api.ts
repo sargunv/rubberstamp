@@ -15,7 +15,11 @@ export const RepoList = v.object({
 
 export type RepoList = v.InferOutput<typeof RepoList>;
 
-const TokenBudget = v.object({ used: v.number(), limit: v.number() });
+/**
+ * How much of the installation's monthly allowance is used, as a fraction that
+ * can pass 1. Never tokens or money: the allowance's unit may change.
+ */
+const Allowance = v.object({ used: v.number() });
 
 /** One repository's state in Rubberstamp, for its page. */
 export const RepoStatus = v.variant("status", [
@@ -42,13 +46,17 @@ export const RepoStatus = v.variant("status", [
       groups: v.array(PreviewGroup),
       warnings: v.array(v.string()),
     }),
-    budget: TokenBudget,
+    allowance: Allowance,
   }),
 ]);
 
 export type RepoStatus = v.InferOutput<typeof RepoStatus>;
 
-export const PreviewState = v.object({ preview: v.nullable(Preview) });
+export const PreviewState = v.object({
+  preview: v.nullable(Preview),
+  /** The fraction of the monthly allowance the stored preview spent. */
+  share: v.nullable(v.number()),
+});
 
 export type PreviewState = v.InferOutput<typeof PreviewState>;
 
@@ -96,3 +104,44 @@ export type LogEntry = v.InferOutput<typeof LogEntry>;
 export const Log = v.object({ entries: v.array(LogEntry) });
 
 export type Log = v.InferOutput<typeof Log>;
+
+/** A label run anywhere in an account, for its activity list. */
+export const ActivityEntry = v.object({
+  ...LogEntry.entries,
+  repo: v.string(),
+});
+
+export type ActivityEntry = v.InferOutput<typeof ActivityEntry>;
+
+/** An account's installation of Rubberstamp, for its page. */
+export const Account = v.object({
+  login: v.string(),
+  type: v.picklist(["User", "Organization"]),
+  /** Where the account manages the installation on GitHub. */
+  manageUrl: v.string(),
+  /** The calendar month the allowance covers, such as `2026-10`. */
+  period: v.string(),
+  allowance: v.object({
+    used: v.number(),
+    /** Whether the account has a custom allowance. */
+    raised: v.boolean(),
+    /** Whether Rubberstamp's shared monthly ceiling is spent, which stops every account. */
+    ceilingReached: v.boolean(),
+  }),
+  /** Repositories the user can tune, busiest first. */
+  repos: v.array(
+    v.object({
+      name: v.string(),
+      private: v.boolean(),
+      /** This month's share of the allowance. */
+      share: v.number(),
+      labeled: v.number(),
+      lastLabeledAt: v.nullable(v.string()),
+    }),
+  ),
+  /** Usage from before it was tracked per repository. */
+  unattributed: v.number(),
+  activity: v.array(ActivityEntry),
+});
+
+export type Account = v.InferOutput<typeof Account>;

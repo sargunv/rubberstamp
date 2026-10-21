@@ -50,6 +50,3 @@ export function changeCount(diff: LabelChange[]) {
     dropped: diff.filter((d) => d.change === "dropped").length,
   };
 }
-
-/** Jev's price per input token, in dollars. */
-export const TOKEN_PRICE = 0.042 / 1e6;

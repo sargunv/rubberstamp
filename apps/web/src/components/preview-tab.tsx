@@ -2,11 +2,11 @@ import { Toggle } from "@base-ui/react/toggle";
 import { ToggleGroup } from "@base-ui/react/toggle-group";
 import { useState, type ReactNode } from "react";
 
+import { percent } from "../format.ts";
 import {
   changeCount,
   labelDiff,
   SAMPLE_SIZE,
-  TOKEN_PRICE,
   type Preview,
   type PreviewItem,
 } from "../preview.ts";
@@ -15,13 +15,8 @@ import { ItemState } from "./item-state.tsx";
 import { LabelDiff } from "./label.tsx";
 import { date, Ledger, LedgerRow } from "./ledger.tsx";
 
-export type Budget = { used: number; limit: number };
-
-export function budgetText({ used, limit }: Budget): string {
-  const percent =
-    limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 100;
-  return `${percent}% of this month's budget used`;
-}
+/** The fraction of this month's allowance used so far. */
+type Allowance = { used: number };
 
 function runLabel(running: boolean, progress: Progress | undefined) {
   if (!running) return null;
@@ -54,23 +49,26 @@ export function PreviewTab({
   repo,
   preview,
   config,
-  budget,
+  share,
+  allowance,
 }: {
   repo: string;
   preview: Preview | null;
   /** The config on the default branch now. */
   config: string;
-  budget: Budget;
+  /** The fraction of the monthly allowance the preview spent. */
+  share: number | null;
+  allowance: Allowance;
 }) {
   return preview ? (
     <PreviewView
       repo={repo}
       preview={preview}
       stale={preview.config !== config}
-      budget={budget}
+      share={share ?? 0}
     />
   ) : (
-    <NoPreview repo={repo} budget={budget} />
+    <NoPreview repo={repo} allowance={allowance} />
   );
 }
 
@@ -78,12 +76,12 @@ function PreviewView({
   repo,
   preview,
   stale,
-  budget,
+  share,
 }: {
   repo: string;
   preview: Preview;
   stale: boolean;
-  budget: Budget;
+  share: number;
 }) {
   const { run, running, progress, error } = useRunPreview(repo);
   const label = runLabel(running, progress);
@@ -99,10 +97,8 @@ function PreviewView({
       <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-xs text-muted">
         <span>
           {preview.items.length} latest items · previewed{" "}
-          {date.format(new Date(preview.createdAt))} with {preview.model} ·{" "}
-          {preview.inputTokens.toLocaleString("en")} tokens, $
-          {(preview.inputTokens * TOKEN_PRICE).toFixed(3)} ·{" "}
-          {budgetText(budget)}
+          {date.format(new Date(preview.createdAt))} with {preview.model} · used{" "}
+          {percent(share)} of the monthly allowance
         </span>
         <button
           type="button"
@@ -234,7 +230,13 @@ function PreviewRow({
   );
 }
 
-function NoPreview({ repo, budget }: { repo: string; budget: Budget }) {
+function NoPreview({
+  repo,
+  allowance,
+}: {
+  repo: string;
+  allowance: Allowance;
+}) {
   const { run, running, progress, error } = useRunPreview(repo);
   const label = runLabel(running, progress);
   return (
@@ -258,7 +260,7 @@ function NoPreview({ repo, budget }: { repo: string; budget: Budget }) {
         </div>
       ) : (
         <p className="mt-3 text-sm text-muted">
-          Read-only. {budgetText(budget)}.
+          Read-only. {percent(allowance.used)} of this month's allowance used.
         </p>
       )}
     </section>

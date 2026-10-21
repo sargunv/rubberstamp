@@ -23,7 +23,8 @@ export const Route = createFileRoute("/$owner/$repo/preview")({
         repo={repo}
         preview={data.preview}
         config={status.config.source}
-        budget={status.budget}
+        share={data.share}
+        allowance={status.allowance}
       />
     );
   },

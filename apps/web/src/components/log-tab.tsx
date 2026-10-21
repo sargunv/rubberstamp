@@ -59,6 +59,7 @@ export function LogTab({
                 <LabelDiff
                   key={name}
                   change={{ name, change: "added" }}
+                  done
                   color={colors.get(name) ?? "888888"}
                 />
               ))

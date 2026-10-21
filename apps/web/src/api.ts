@@ -1,4 +1,5 @@
 import {
+  Account,
   Log,
   Me,
   PreviewEvent,
@@ -57,6 +58,16 @@ export function getRepos(): Promise<RepoList> {
 export async function getRepo(name: string): Promise<RepoStatus | null> {
   try {
     return await call(RepoStatus, `/api/repos/${name}`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+/** An account's installation, or null if the user can't see it. */
+export async function getAccount(owner: string): Promise<Account | null> {
+  try {
+    return await call(Account, `/api/accounts/${owner}`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null;
     throw error;

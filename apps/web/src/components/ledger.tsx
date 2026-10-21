@@ -55,8 +55,9 @@ export function LedgerRow({
   title: ReactNode;
   meta: ReactNode;
   labels: ReactNode;
-  groups: Group[];
-  decisions: Decision[];
+  /** Without groups, the row has no scores to show. */
+  groups?: Group[];
+  decisions?: Decision[];
 }) {
   return (
     <Collapsible.Root
@@ -87,24 +88,28 @@ export function LedgerRow({
         {labels}
       </div>
 
-      <div className="col-start-2 pb-4 pl-5 lg:col-start-auto lg:flex lg:items-start lg:justify-end lg:py-4 lg:pl-0">
-        <Collapsible.Trigger className="group -ml-1.5 flex items-center gap-1 rounded-[3px] px-1.5 py-0.5 text-sm text-muted hover:text-ink data-panel-open:text-ink lg:-mr-1.5 lg:ml-0">
-          Scores
-          <Chevron className="transition-transform group-data-panel-open:rotate-180" />
-        </Collapsible.Trigger>
-      </div>
+      {groups && decisions ? (
+        <>
+          <div className="col-start-2 pb-4 pl-5 lg:col-start-auto lg:flex lg:items-start lg:justify-end lg:py-4 lg:pl-0">
+            <Collapsible.Trigger className="group -ml-1.5 flex items-center gap-1 rounded-[3px] px-1.5 py-0.5 text-sm text-muted hover:text-ink data-panel-open:text-ink lg:-mr-1.5 lg:ml-0">
+              Scores
+              <Chevron className="transition-transform group-data-panel-open:rotate-180" />
+            </Collapsible.Trigger>
+          </div>
 
-      <Collapsible.Panel className="col-span-full col-start-2 h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
-        <div className="grid gap-x-10 gap-y-6 pt-1 pb-6 pl-5 sm:grid-cols-2 lg:grid-cols-3">
-          {groups.map((g) => (
-            <GroupScores
-              key={g.id}
-              group={g}
-              decisions={decisions.filter((d) => d.group === g.id)}
-            />
-          ))}
-        </div>
-      </Collapsible.Panel>
+          <Collapsible.Panel className="col-span-full col-start-2 h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
+            <div className="grid gap-x-10 gap-y-6 pt-1 pb-6 pl-5 sm:grid-cols-2 lg:grid-cols-3">
+              {groups.map((g) => (
+                <GroupScores
+                  key={g.id}
+                  group={g}
+                  decisions={decisions.filter((d) => d.group === g.id)}
+                />
+              ))}
+            </div>
+          </Collapsible.Panel>
+        </>
+      ) : null}
     </Collapsible.Root>
   );
 }

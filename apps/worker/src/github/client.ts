@@ -23,8 +23,17 @@ const Token = v.object({ token: v.string(), expires_at: v.string() });
 
 const Installation = v.object({
   id: v.number(),
-  account: v.object({ login: v.string() }),
+  account: v.object({
+    login: v.string(),
+    type: v.optional(v.picklist(["User", "Organization"]), "User"),
+  }),
 });
+
+export type UserInstallation = {
+  id: number;
+  account: string;
+  type: "User" | "Organization";
+};
 
 const UserRepo = v.object({
   full_name: v.string(),
@@ -295,6 +304,10 @@ class RepoClient implements RepoApi {
 /** What the signed-in user can see, through the app. */
 export interface UserApi {
   me(): Promise<{ login: string; avatarUrl: string }>;
+  /** The app's installations the user can see. */
+  installations(): Promise<UserInstallation[]>;
+  /** Repositories in one installation that the user can see. */
+  installationRepos(installationId: number): Promise<UserRepo[]>;
   /** Repositories in the app's installations that the user can see. */
   repos(): Promise<UserRepo[]>;
   /** The user's view of one repository, or null if they can't see it. */
@@ -323,23 +336,37 @@ class UserClient implements UserApi {
     return { login: user.login, avatarUrl: user.avatar_url };
   }
 
-  async repos(): Promise<UserRepo[]> {
+  async installations(): Promise<UserInstallation[]> {
     const { installations } = await this.json(
       v.object({ installations: v.array(Installation) }),
       `/user/installations?per_page=${PAGE}`,
     );
+    return installations.map((i) => ({
+      id: i.id,
+      account: i.account.login,
+      type: i.account.type,
+    }));
+  }
+
+  async installationRepos(installationId: number): Promise<UserRepo[]> {
     const repos: UserRepo[] = [];
-    for (const installation of installations) {
-      for (let page = 1; page <= MAX_REPO_PAGES; page++) {
-        const { repositories } = await this.json(
-          v.object({ repositories: v.array(UserRepo) }),
-          `/user/installations/${installation.id}/repositories?per_page=${PAGE}&page=${page}`,
-        );
-        repos.push(...repositories);
-        if (repositories.length < PAGE) break;
-      }
+    for (let page = 1; page <= MAX_REPO_PAGES; page++) {
+      const { repositories } = await this.json(
+        v.object({ repositories: v.array(UserRepo) }),
+        `/user/installations/${installationId}/repositories?per_page=${PAGE}&page=${page}`,
+      );
+      repos.push(...repositories);
+      if (repositories.length < PAGE) break;
     }
     return repos;
+  }
+
+  async repos(): Promise<UserRepo[]> {
+    const installations = await this.installations();
+    const lists = await Promise.all(
+      installations.map((i) => this.installationRepos(i.id)),
+    );
+    return lists.flat();
   }
 
   async repo(fullName: string): Promise<UserRepo | null> {

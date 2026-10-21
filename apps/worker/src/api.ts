@@ -1,5 +1,6 @@
 import {
   parseConfig,
+  type Account,
   previewGroups,
   resolveLabels,
   type Log,
@@ -19,7 +20,7 @@ import {
   sessionKey,
   type Session,
 } from "./auth/session.ts";
-import { budgetFor, budgetPeriod } from "./budget.ts";
+import { budgetFor, budgetPeriod, type Budgets } from "./budget.ts";
 import { services } from "./services.ts";
 
 type Env_ = { Bindings: Env; Variables: { session: Session } };
@@ -154,6 +155,11 @@ async function access(c: Context<Env_>): Promise<Access> {
   return { ok: true, repo: repo.full_name, installation };
 }
 
+/** An account's monthly allowance, in the unit usage is recorded in. */
+function allowanceFor(budgets: Budgets, account: string): number {
+  return Math.max(1, budgetFor(budgets, account).installation);
+}
+
 function previews(env: Env, repo: string) {
   return env.PREVIEWS.get(env.PREVIEWS.idFromName(repo.toLowerCase()));
 }
@@ -203,10 +209,7 @@ api.get("/repos/:owner/:repo", async (c) => {
       groups: previewGroups(groups),
       warnings,
     },
-    budget: {
-      used,
-      limit: budgetFor(budgets, installation.account).installation,
-    },
+    allowance: { used: used / allowanceFor(budgets, installation.account) },
   };
   return c.json(status);
 });
@@ -219,11 +222,17 @@ api.get("/repos/:owner/:repo/log", (c) =>
 );
 
 api.get("/repos/:owner/:repo/preview", (c) =>
-  withRepo(c, async ({ repo }) =>
-    c.json({
-      preview: await previews(c.env, repo).preview(),
-    } satisfies PreviewState),
-  ),
+  withRepo(c, async ({ repo, installation }) => {
+    const preview = await previews(c.env, repo).preview();
+    const allowance = allowanceFor(
+      services(c.env).budgets,
+      installation.account,
+    );
+    return c.json({
+      preview,
+      share: preview ? preview.inputTokens / allowance : null,
+    } satisfies PreviewState);
+  }),
 );
 
 api.post("/repos/:owner/:repo/preview", (c) =>
@@ -238,3 +247,67 @@ api.post("/repos/:owner/:repo/preview", (c) =>
     });
   }),
 );
+
+api.get("/accounts/:owner", async (c) => {
+  const { github, store, budgets, policy } = services(c.env);
+  const owner = c.req.param("owner").toLowerCase();
+  const user = github.user(c.get("session").token);
+  const installation = (await user.installations()).find(
+    (i) => i.account.toLowerCase() === owner,
+  );
+  if (!installation) return c.json({ error: "Not found" }, 404);
+
+  const period = budgetPeriod(new Date());
+  const [visible, usage, activity, runs, global] = await Promise.all([
+    user.installationRepos(installation.id),
+    store.repoUsage(installation.id, period),
+    store.repoActivity(installation.id, `${period}-01 00:00:00`),
+    store.installationRuns(installation.id, 20),
+    store.globalUsage(period),
+  ]);
+  const allowance = allowanceFor(budgets, installation.account);
+  const tokens = new Map(usage.map((u) => [u.repo, u.tokens]));
+  const labeled = new Map(activity.map((a) => [a.repo, a]));
+  const seen = new Set(visible.map((r) => r.full_name));
+
+  const repos = visible
+    .filter((r) => r.permissions?.push || r.permissions?.admin)
+    .filter(
+      (r) => !r.private || allowlisted(policy.privateAllowlist, r.full_name),
+    )
+    .map((r) => ({
+      name: r.full_name,
+      private: r.private,
+      share: (tokens.get(r.full_name) ?? 0) / allowance,
+      labeled: labeled.get(r.full_name)?.labeled ?? 0,
+      lastLabeledAt: labeled.get(r.full_name)?.lastLabeledAt ?? null,
+    }))
+    .sort(
+      (a, b) =>
+        b.share - a.share ||
+        b.labeled - a.labeled ||
+        a.name.localeCompare(b.name),
+    );
+
+  const account: Account = {
+    login: installation.account,
+    type: installation.type,
+    manageUrl:
+      installation.type === "Organization"
+        ? `https://github.com/organizations/${installation.account}/settings/installations/${installation.id}`
+        : `https://github.com/settings/installations/${installation.id}`,
+    period,
+    allowance: {
+      used: usage.reduce((sum, u) => sum + u.tokens, 0) / allowance,
+      raised:
+        budgetFor(budgets, installation.account).installation !==
+        budgets.installation,
+      ceilingReached: global >= budgets.global,
+    },
+    repos,
+    unattributed: (tokens.get("") ?? 0) / allowance,
+    // Only items in repositories this user can see.
+    activity: runs.filter((r) => seen.has(r.repo)),
+  };
+  return c.json(account);
+});

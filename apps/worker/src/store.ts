@@ -1,5 +1,14 @@
-import { LogEntry, type LabelDecision } from "@sargunv/rubberstamp-core";
+import {
+  LogEntry,
+  type ActivityEntry,
+  type LabelDecision,
+} from "@sargunv/rubberstamp-core";
 import * as v from "valibot";
+
+/** SQLite's datetime('now') is UTC without a zone; make it ISO 8601. */
+function sqliteTime(value: string): string {
+  return `${value.replace(" ", "T")}Z`;
+}
 
 /** A label_runs row, as the decision log shows it. */
 const RunRow = v.pipe(
@@ -21,8 +30,7 @@ const RunRow = v.pipe(
     decisions: JSON.parse(row.decisions),
     added: JSON.parse(row.added),
     inputTokens: row.input_tokens,
-    // SQLite's datetime('now') is UTC without a zone.
-    createdAt: `${row.created_at.replace(" ", "T")}Z`,
+    createdAt: sqliteTime(row.created_at),
   })),
   LogEntry,
 );
@@ -47,6 +55,7 @@ export interface Store {
   addUsage(
     installationId: number,
     period: string,
+    repo: string,
     tokens: number,
   ): Promise<void>;
   saveLabelRun(run: LabelRun): Promise<void>;
@@ -73,11 +82,79 @@ export class CloudflareStore implements Store {
   async usage(installationId: number, period: string): Promise<number> {
     const tokens = await this.db
       .prepare(
-        "SELECT input_tokens FROM usage WHERE installation_id = ? AND period = ?",
+        "SELECT SUM(input_tokens) AS tokens FROM usage WHERE installation_id = ? AND period = ?",
       )
       .bind(installationId, period)
-      .first<number>("input_tokens");
+      .first<number | null>("tokens");
     return tokens ?? 0;
+  }
+
+  /** An installation's usage per repository for a month; '' is unattributed. */
+  async repoUsage(
+    installationId: number,
+    period: string,
+  ): Promise<{ repo: string; tokens: number }[]> {
+    const { results } = await this.db
+      .prepare(
+        "SELECT repo, input_tokens FROM usage WHERE installation_id = ? AND period = ?",
+      )
+      .bind(installationId, period)
+      .all();
+    return results.map((row) =>
+      v.parse(
+        v.pipe(
+          v.object({ repo: v.string(), input_tokens: v.number() }),
+          v.transform((r) => ({ repo: r.repo, tokens: r.input_tokens })),
+        ),
+        row,
+      ),
+    );
+  }
+
+  /** Items labeled per repository since a time, and when each last was. */
+  async repoActivity(
+    installationId: number,
+    since: string,
+  ): Promise<{ repo: string; labeled: number; lastLabeledAt: string }[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT repo, COUNT(*) AS labeled, MAX(created_at) AS last
+         FROM label_runs WHERE installation_id = ? AND created_at >= ?
+         GROUP BY repo`,
+      )
+      .bind(installationId, since)
+      .all();
+    return results.map((row) =>
+      v.parse(
+        v.pipe(
+          v.object({ repo: v.string(), labeled: v.number(), last: v.string() }),
+          v.transform((r) => ({
+            repo: r.repo,
+            labeled: r.labeled,
+            lastLabeledAt: sqliteTime(r.last),
+          })),
+        ),
+        row,
+      ),
+    );
+  }
+
+  /** An installation's newest label runs across its repositories. */
+  async installationRuns(
+    installationId: number,
+    limit: number,
+  ): Promise<ActivityEntry[]> {
+    const { results } = await this.db
+      .prepare(
+        `SELECT repo, number, title, type, model, decisions, added, input_tokens, created_at
+         FROM label_runs WHERE installation_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+      )
+      .bind(installationId, limit)
+      .all();
+    return results.map((row) => ({
+      ...v.parse(RunRow, row),
+      repo: v.parse(v.object({ repo: v.string() }), row).repo,
+    }));
   }
 
   async globalUsage(period: string): Promise<number> {
@@ -88,14 +165,19 @@ export class CloudflareStore implements Store {
     return tokens ?? 0;
   }
 
-  async addUsage(installationId: number, period: string, tokens: number) {
+  async addUsage(
+    installationId: number,
+    period: string,
+    repo: string,
+    tokens: number,
+  ) {
     await this.db
       .prepare(
-        `INSERT INTO usage (installation_id, period, input_tokens) VALUES (?, ?, ?)
-         ON CONFLICT (installation_id, period)
+        `INSERT INTO usage (installation_id, period, repo, input_tokens) VALUES (?, ?, ?, ?)
+         ON CONFLICT (installation_id, period, repo)
          DO UPDATE SET input_tokens = input_tokens + excluded.input_tokens`,
       )
-      .bind(installationId, period, tokens)
+      .bind(installationId, period, repo, tokens)
       .run();
   }
 
