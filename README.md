@@ -35,6 +35,7 @@ build, test, and run it.
 
 ## License
 
-[AGPL-3.0-or-later](LICENSE). See the
-[privacy policy](https://rubberstamp.sargunv.dev/privacy) for how the hosted app
+[AGPL-3.0-or-later](LICENSE). The hosted app has its own
+[terms of use](https://rubberstamp.sargunv.dev/terms), and its
+[privacy policy](https://rubberstamp.sargunv.dev/privacy) describes how it
 handles data.

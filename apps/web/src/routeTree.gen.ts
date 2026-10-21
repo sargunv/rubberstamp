@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as OwnerIndexRouteImport } from './routes/$owner/index'
 import { Route as OwnerRepoRouteRouteImport } from './routes/$owner/$repo/route'
 import { Route as OwnerRepoIndexRouteImport } from './routes/$owner/$repo/index'
@@ -25,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OwnerIndexRoute = OwnerIndexRouteImport.update({
@@ -56,6 +62,7 @@ const OwnerRepoPreviewRoute = OwnerRepoPreviewRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/$owner/$repo': typeof OwnerRepoRouteRouteWithChildren
   '/$owner/': typeof OwnerIndexRoute
   '/$owner/$repo/log': typeof OwnerRepoLogRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/$owner': typeof OwnerIndexRoute
   '/$owner/$repo/log': typeof OwnerRepoLogRoute
   '/$owner/$repo/preview': typeof OwnerRepoPreviewRoute
@@ -74,6 +82,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/privacy': typeof PrivacyRoute
+  '/terms': typeof TermsRoute
   '/$owner/$repo': typeof OwnerRepoRouteRouteWithChildren
   '/$owner/': typeof OwnerIndexRoute
   '/$owner/$repo/log': typeof OwnerRepoLogRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/privacy'
+    | '/terms'
     | '/$owner/$repo'
     | '/$owner/'
     | '/$owner/$repo/log'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/privacy'
+    | '/terms'
     | '/$owner'
     | '/$owner/$repo/log'
     | '/$owner/$repo/preview'
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/privacy'
+    | '/terms'
     | '/$owner/$repo'
     | '/$owner/'
     | '/$owner/$repo/log'
@@ -112,6 +124,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PrivacyRoute: typeof PrivacyRoute
+  TermsRoute: typeof TermsRoute
   OwnerRepoRouteRoute: typeof OwnerRepoRouteRouteWithChildren
   OwnerIndexRoute: typeof OwnerIndexRoute
 }
@@ -130,6 +143,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$owner/': {
@@ -189,6 +209,7 @@ const OwnerRepoRouteRouteWithChildren = OwnerRepoRouteRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PrivacyRoute: PrivacyRoute,
+  TermsRoute: TermsRoute,
   OwnerRepoRouteRoute: OwnerRepoRouteRouteWithChildren,
   OwnerIndexRoute: OwnerIndexRoute,
 }
