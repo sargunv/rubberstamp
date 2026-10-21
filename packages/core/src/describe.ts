@@ -9,6 +9,12 @@ export type PullFile = {
   patch?: string | undefined;
 };
 
+/**
+ * The status of a file a pull request changed when a unit last passed but no
+ * longer does. It has no patch: what's gone is the change itself.
+ */
+export const REVERTED = "reverted";
+
 export type Item =
   | { type: "issue"; title: string; body: string | null }
   | {
@@ -83,7 +89,10 @@ export function fileList(files: PullFile[]): string[] {
   const listed: string[] = [];
   let size = 0;
   for (const file of files) {
-    const line = `${STATUS[file.status] ?? "M"} ${file.filename} (${fileSummary(file)})`;
+    const line =
+      file.status === REVERTED
+        ? `${file.filename} (reverted: the pull request no longer changes it)`
+        : `${STATUS[file.status] ?? "M"} ${file.filename} (${fileSummary(file)})`;
     size += line.length + 4;
     if (size > FILE_LIST_LIMIT) {
       listed.push(`... and ${files.length - listed.length} more changed files`);

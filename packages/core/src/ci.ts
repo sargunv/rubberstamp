@@ -7,6 +7,7 @@ import {
   contextText,
   fileList,
   filePatch,
+  REVERTED,
   squash,
   type PullFile,
 } from "./describe.ts";
@@ -30,8 +31,16 @@ export type Unit = {
   threshold: number;
 };
 
-/** The pull request a plan judges. */
-export type Change = { title: string; body: string | null; files: PullFile[] };
+/**
+ * The pull request a plan judges: all of it, or only what changed since its
+ * units last passed at the commit `since`.
+ */
+export type Change = {
+  title: string;
+  body: string | null;
+  files: PullFile[];
+  since?: string;
+};
 
 export const UnitDecision = v.object({
   unit: v.string(),
@@ -41,6 +50,11 @@ export const UnitDecision = v.object({
   score: v.nullable(v.number()),
   /** Why the unit runs regardless of its score, or "" when the score decided. */
   rule: v.string(),
+  /**
+   * The commit where the unit last passed, when it was judged only on what
+   * changed since. Absent when judged on the whole pull request.
+   */
+  since: v.optional(v.string()),
 });
 
 export type UnitDecision = v.InferOutput<typeof UnitDecision>;
@@ -112,6 +126,14 @@ export function planRequests(
   const described: { [key: string]: Json } = {
     title: change.title,
     body: (change.body ?? "").slice(0, BODY_LIMIT),
+    ...(change.since === undefined
+      ? {}
+      : {
+          scope:
+            "Only the files whose changes differ from the pull request at " +
+            `commit ${change.since.slice(0, 7)}, where this coverage last ` +
+            "passed. The rest of the pull request already passed it.",
+        }),
     files: fileList(change.files),
   };
   const fixed = {
@@ -119,7 +141,7 @@ export function planRequests(
     change: described,
   };
   const chunks = chunk(
-    change.files.map(filePatch),
+    change.files.filter((file) => file.status !== REVERTED).map(filePatch),
     STATE_BUDGET - JSON.stringify(fixed).length,
   );
   if (chunks.length > MAX_CHUNKS) return null;
@@ -172,11 +194,15 @@ export function changedPaths(files: PullFile[]): string[] {
   );
 }
 
-/** Units at or above their threshold, and every unit a changed path forces. */
+/**
+ * Units at or above their threshold, and every unit a changed path forces.
+ * `since` is the pass the change was judged from, if not the merge base.
+ */
 export function decideUnits(
   units: Unit[],
   scores: Record<string, number>,
   paths: string[],
+  since?: string,
 ): UnitDecision[] {
   return units.map((unit) => {
     const score = scores[unit.id] ?? 0;
@@ -187,6 +213,7 @@ export function decideUnits(
       run: forced !== undefined || score >= unit.threshold,
       score,
       rule: forced === undefined ? "" : `matches ${forced}`,
+      ...(since === undefined ? {} : { since }),
     };
   });
 }
@@ -200,4 +227,67 @@ export function everyUnit(units: Unit[], rule: string): UnitDecision[] {
     score: null,
     rule,
   }));
+}
+
+/** Run none of the units, without asking, for the given reason. */
+export function noUnit(
+  units: Unit[],
+  rule: string,
+  since?: string,
+): UnitDecision[] {
+  return units.map((unit) => ({
+    unit: unit.id,
+    threshold: unit.threshold,
+    run: false,
+    score: null,
+    rule,
+    ...(since === undefined ? {} : { since }),
+  }));
+}
+
+/**
+ * A patch's added and removed lines, without hunk headers or context. Where a
+ * change sits in its file moves when the base does, as on a rebase, but the
+ * change itself doesn't.
+ */
+export function patchLines(patch: string): string {
+  return patch
+    .split("\n")
+    .filter((line) => line.startsWith("+") || line.startsWith("-"))
+    .join("\n");
+}
+
+/**
+ * The files whose changes differ between a pull request's patches now and
+ * its patches when a unit last passed, each as it is now. A file only the old
+ * patches change is listed as reverted. Null when a file on either side has
+ * no patch to compare, as binary and very large files don't.
+ */
+export function changedSince(
+  now: PullFile[],
+  then: PullFile[],
+): PullFile[] | null {
+  if ([...now, ...then].some((file) => file.patch === undefined)) return null;
+  const change = (file: PullFile) =>
+    JSON.stringify([
+      file.status,
+      file.previous_filename ?? null,
+      patchLines(file.patch ?? ""),
+    ]);
+  const before = new Map(then.map((file) => [file.filename, change(file)]));
+  const present = new Set(now.map((file) => file.filename));
+  return [
+    ...now.filter((file) => before.get(file.filename) !== change(file)),
+    ...then
+      .filter((file) => !present.has(file.filename))
+      .map((file) => ({
+        filename: file.filename,
+        ...(file.previous_filename === undefined
+          ? {}
+          : { previous_filename: file.previous_filename }),
+        status: REVERTED,
+        additions: 0,
+        deletions: 0,
+      })),
+  ];
 }

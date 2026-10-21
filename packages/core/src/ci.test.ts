@@ -2,9 +2,12 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   changedPaths,
+  changedSince,
   ciUnits,
   decideUnits,
   everyUnit,
+  noUnit,
+  patchLines,
   planRequests,
   unitScores,
   type Change,
@@ -163,5 +166,134 @@ describe("decideUnits", () => {
         rule: "too large to judge",
       },
     ]);
+  });
+
+  it("records the pass a unit was judged since, and skips by rule", () => {
+    expect(decideUnits(units, { macos: 0.5 }, [], "abc123")[1]).toEqual({
+      unit: "macos",
+      threshold: 0.3,
+      run: true,
+      score: 0.5,
+      rule: "",
+      since: "abc123",
+    });
+    expect(noUnit(units, "no changes since abc123", "abc123")[0]).toEqual({
+      unit: "linux-x64",
+      threshold: 0.6,
+      run: false,
+      score: null,
+      rule: "no changes since abc123",
+      since: "abc123",
+    });
+  });
+});
+
+describe("patchLines", () => {
+  it("keeps only added and removed lines", () => {
+    expect(
+      patchLines(
+        "@@ -10,3 +10,3 @@ void f() {\n ctx\n-a\n+b\n ctx\n\\ No newline at end of file",
+      ),
+    ).toBe("-a\n+b");
+  });
+
+  it("ignores hunk headers and context that a rebase moves", () => {
+    const before = "@@ -1,3 +1,3 @@\n one\n-a\n+b\n two";
+    const after = "@@ -41,4 +41,4 @@ class Map {\n zero\n one\n-a\n+b";
+    expect(patchLines(before)).toBe(patchLines(after));
+  });
+});
+
+describe("changedSince", () => {
+  const file = (filename: string, patch: string) => ({
+    ...FILE,
+    filename,
+    patch,
+  });
+
+  it("finds nothing when only line numbers and context moved", () => {
+    expect(
+      changedSince(
+        [file("a.cpp", "@@ -20,3 +20,3 @@\n x\n-a\n+b\n y")],
+        [file("a.cpp", "@@ -1,2 +1,2 @@\n-a\n+b\n z")],
+      ),
+    ).toEqual([]);
+  });
+
+  it("lists a file whose changes were edited, as it is now", () => {
+    const now = file("b.cpp", "@@ -1 +1 @@\n-a\n+c");
+    expect(
+      changedSince(
+        [file("a.cpp", "@@ -1 +1 @@\n-a\n+b"), now],
+        [
+          file("a.cpp", "@@ -1 +1 @@\n-a\n+b"),
+          file("b.cpp", "@@ -1 +1 @@\n-a\n+b"),
+        ],
+      ),
+    ).toEqual([now]);
+  });
+
+  it("lists a file added since, and one the pull request reverted", () => {
+    const added = file("new.cpp", "@@ -0,0 +1 @@\n+x");
+    expect(
+      changedSince(
+        [added],
+        [
+          {
+            ...file("gone.cpp", "@@ -1 +1 @@\n-a\n+b"),
+            previous_filename: "old.cpp",
+            status: "renamed",
+          },
+        ],
+      ),
+    ).toEqual([
+      added,
+      {
+        filename: "gone.cpp",
+        previous_filename: "old.cpp",
+        status: "reverted",
+        additions: 0,
+        deletions: 0,
+      },
+    ]);
+  });
+
+  it("can't compare a file without a patch on either side", () => {
+    const binary = { ...FILE, patch: undefined };
+    expect(changedSince([binary], [FILE])).toBeNull();
+    expect(changedSince([FILE], [binary])).toBeNull();
+  });
+});
+
+describe("planRequests since a pass", () => {
+  it("says what it covers and lists reverted files without a patch", () => {
+    const [request] =
+      planRequests(
+        config(),
+        ciUnits(config()),
+        {
+          ...change([
+            FILE,
+            {
+              filename: "src/gone.cpp",
+              status: "reverted",
+              additions: 0,
+              deletions: 0,
+            },
+          ]),
+          since: "abcdef1234",
+        },
+        "m",
+      ) ?? [];
+    expect(request?.state).toMatchObject({
+      change: {
+        scope: expect.stringContaining("at commit abcdef1, where"),
+        files: [
+          "M src/map.cpp (+1 -1)",
+          "src/gone.cpp (reverted: the pull request no longer changes it)",
+        ],
+      },
+    });
+    expect(JSON.stringify(request?.state)).not.toContain("b/src/gone.cpp");
   });
 });
