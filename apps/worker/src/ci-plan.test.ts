@@ -252,6 +252,79 @@ describe("ciPlan", () => {
     expect(jobs).toHaveLength(1);
   });
 
+  describe("records the units the asking run executes", () => {
+    const run = { run_id: 9001, run_attempt: 2 };
+
+    it("from the plan it follows", async () => {
+      const { deps, save, store } = setup();
+      await save(HEAD, judged);
+
+      await ciPlan(query(run), null, deps);
+      expect([...store.ciRuns.values()]).toEqual([
+        {
+          installationId: 1,
+          repoId: 2,
+          runId: 9001,
+          attempt: 2,
+          number: 3,
+          head: HEAD,
+          base: "base123",
+          units: ["linux"],
+        },
+      ]);
+    });
+
+    it("as every configured unit when every unit runs", async () => {
+      const { deps, save, store } = setup();
+      await save(HEAD, [
+        { unit: "linux", threshold: 0.5, run: true, score: null, rule: "x" },
+        { unit: "macos", threshold: 0.5, run: true, score: null, rule: "x" },
+      ]);
+
+      await ciPlan(query(run), null, deps);
+      expect(store.ciRuns.get("2 9001 2")?.units).toEqual(["linux", "macos"]);
+    });
+
+    it("against the pull request's base when there's no plan to follow", async () => {
+      const { deps, store } = setup();
+
+      await ciPlan(query({ ...run, sha: OLD }), null, deps);
+      expect(store.ciRuns.get("2 9001 2")).toMatchObject({
+        head: OLD,
+        base: "base123",
+        units: ["linux", "macos"],
+      });
+    });
+
+    it("once, however often the run asks", async () => {
+      const { deps, save, store } = setup();
+      await save(HEAD, judged);
+      await ciPlan(query(run), null, deps);
+      await ciPlan(query(run), null, deps);
+      expect(store.ciRuns.size).toBe(1);
+    });
+
+    it("but not while the plan is pending", async () => {
+      const { deps, store } = setup();
+      const reply = await ciPlan(query({ ...run, start: true }), null, deps);
+      expect(reply.code).toBe(202);
+      expect(store.ciRuns.size).toBe(0);
+    });
+
+    it("but not when no units are configured", async () => {
+      const { deps, store } = setup({ source: LABELS_ONLY });
+      await ciPlan(query(run), null, deps);
+      expect(store.ciRuns.size).toBe(0);
+    });
+
+    it("but not for an action too old to name its run", async () => {
+      const { deps, save, store } = setup();
+      await save(HEAD, judged);
+      expect((await ciPlan(query(), null, deps)).code).toBe(200);
+      expect(store.ciRuns.size).toBe(0);
+    });
+  });
+
   it("doesn't serve a private repository off the allowlist", async () => {
     const { deps, repo } = setup({ tokens: ["good"], allow: "" });
     repo.private = true;
@@ -287,7 +360,20 @@ describe("PlanQuery", () => {
     });
   });
 
+  it("accepts the run that asks", () => {
+    const parsed = v.parse(PlanQuery, {
+      repository: "o/r",
+      pull_request: 12,
+      sha: HEAD,
+      run_id: 18_000_000_000,
+      run_attempt: 1,
+    });
+    expect(parsed).toMatchObject({ run_id: 18_000_000_000, run_attempt: 1 });
+  });
+
   it.each([
+    { repository: "o/r", pull_request: 1, sha: HEAD, run_id: 0 },
+    { repository: "o/r", pull_request: 1, sha: HEAD, run_attempt: "1" },
     { repository: "../r", pull_request: 1, sha: HEAD },
     { repository: "o/..", pull_request: 1, sha: HEAD },
     { repository: "o/r/x", pull_request: 1, sha: HEAD },

@@ -9,6 +9,7 @@ import { runLabelJob } from "./jobs/label.ts";
 import { runPlanJob } from "./jobs/plan.ts";
 import { services } from "./services.ts";
 import { CLAIM_MINUTES, CloudflareStore } from "./store.ts";
+import { recordPasses } from "./unit-passes.ts";
 import { webhookEffects } from "./webhooks.ts";
 
 export { RepoPreviews } from "./preview/object.ts";
@@ -60,6 +61,7 @@ app.post("/webhooks/github", async (c) => {
       store.saveInstallation(i.id, i.account, i.deleted),
     ),
     ...effects.forget.map((f) => store.forgetRuns(f.installationId, f.repoIds)),
+    ...effects.succeeded.map((run) => recordPasses(run, store)),
   ]);
   return c.body(null, 204);
 });

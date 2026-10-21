@@ -54,6 +54,14 @@ number=$(jq -er '.pull_request.number | numbers' "${GITHUB_EVENT_PATH:-}" 2> /de
 sha=$(jq -er '.pull_request.head.sha | strings' "${GITHUB_EVENT_PATH:-}" 2> /dev/null) ||
   everything "couldn't read the pull request from the event" warning
 
+# The run asking, so Rubberstamp can tell which units passed once it succeeds.
+# Without them the plan still works; only that record is lost.
+run_id="${GITHUB_RUN_ID:-}"
+run_attempt="${GITHUB_RUN_ATTEMPT:-}"
+if ! [[ "$run_id" =~ ^[1-9][0-9]*$ && "$run_attempt" =~ ^[1-9][0-9]*$ ]]; then
+  run_id=""
+fi
+
 response=$(mktemp)
 trap 'rm -f "$response"' EXIT
 
@@ -68,7 +76,12 @@ ask() {
     --argjson pull_request "$number" \
     --arg sha "$sha" \
     --argjson start "$1" \
-    '{$repository, $pull_request, $sha, $start}')
+    --arg run_id "$run_id" \
+    --arg run_attempt "$run_attempt" \
+    '{$repository, $pull_request, $sha, $start}
+      + if $run_id == "" then {} else
+          {run_id: ($run_id | tonumber), run_attempt: ($run_attempt | tonumber)}
+        end')
   if [[ -n "$token" ]]; then
     printf 'header = "Authorization: Bearer %s"\n' "$token"
   fi | curl --config - --silent --show-error \

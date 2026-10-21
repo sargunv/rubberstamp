@@ -32,6 +32,16 @@ const PullRequestEvent = v.object({
 /** Pull request actions that leave it at a head no plan has judged. */
 const NEW_HEAD = new Set(["opened", "reopened", "synchronize"]);
 
+const WorkflowRunEvent = v.object({
+  ...ItemFields,
+  workflow_run: v.object({
+    id: v.number(),
+    run_attempt: v.number(),
+    conclusion: v.nullable(v.string()),
+    head_sha: v.string(),
+  }),
+});
+
 const InstallationEvent = v.object({
   action: v.string(),
   installation: v.object({
@@ -51,6 +61,15 @@ export type Effects = {
   installations: { id: number; account: string; deleted: boolean }[];
   /** Runs to delete: the whole installation's, or only some repositories'. */
   forget: { installationId: number; repoIds?: number[] }[];
+  /** Workflow runs that succeeded, whose units passed if a plan step asked. */
+  succeeded: SucceededRun[];
+};
+
+export type SucceededRun = {
+  repoId: number;
+  runId: number;
+  attempt: number;
+  head: string;
 };
 
 /** Public repositories are open to all; private ones need the allowlist. */
@@ -71,7 +90,12 @@ export function webhookEffects(
   payload: unknown,
   policy: Policy,
 ): Effects {
-  const effects: Effects = { jobs: [], installations: [], forget: [] };
+  const effects: Effects = {
+    jobs: [],
+    installations: [],
+    forget: [],
+    succeeded: [],
+  };
 
   if (event === "installation") {
     const parsed = v.safeParse(InstallationEvent, payload);
@@ -95,6 +119,27 @@ export function webhookEffects(
       effects.forget.push({
         installationId: parsed.output.installation.id,
         repoIds: parsed.output.repositories_removed.map((r) => r.id),
+      });
+    }
+    return effects;
+  }
+
+  // A failed or cancelled run moves no unit's last pass, so the next plan
+  // judges those units again from wherever they last passed.
+  if (event === "workflow_run") {
+    const parsed = v.safeParse(WorkflowRunEvent, payload);
+    if (
+      parsed.success &&
+      parsed.output.action === "completed" &&
+      parsed.output.workflow_run.conclusion === "success" &&
+      allowed(parsed.output.repository, policy)
+    ) {
+      const run = parsed.output.workflow_run;
+      effects.succeeded.push({
+        repoId: parsed.output.repository.id,
+        runId: run.id,
+        attempt: run.run_attempt,
+        head: run.head_sha,
       });
     }
     return effects;
