@@ -21,7 +21,8 @@
       "migrations_dir": "migrations"
     }
   ],
-  "r2_buckets": [{ "binding": "STATES", "bucket_name": "rubberstamp-states" }],
+  // Daily cleanup of old label runs.
+  "triggers": { "crons": ["17 4 * * *"] },
   "queues": {
     "producers": [{ "binding": "JOBS", "queue": "rubberstamp-jobs" }],
     "consumers": [

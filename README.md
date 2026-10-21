@@ -59,3 +59,10 @@ and every installation shares a global monthly ceiling. An issue costs about
 3,000 tokens and a large pull request 15,000 to 20,000, so the budget covers
 roughly 1,000 to 8,000 items a month. Over either budget, Rubberstamp adds no
 labels until the next UTC month.
+
+## Data
+
+Rubberstamp keeps a record of each item it labels: the labels it chose, their
+scores, and the tokens spent. Records older than 180 days are deleted, and
+removing a repository from the installation, or uninstalling, deletes its
+records. Repositories without a configuration file store nothing.

@@ -2,7 +2,7 @@ import type { Request, Response } from "@sargunv/rubberstamp-core";
 import { describe, expect, it } from "vite-plus/test";
 
 import type { Issue, RepoApi } from "../github/client.ts";
-import type { CachedAnswer, LabelRun, Store } from "../store.ts";
+import type { LabelRun, Store } from "../store.ts";
 import { runLabelJob, type LabelJob } from "./label.ts";
 
 const CONFIG = `
@@ -53,8 +53,6 @@ class FakeRepo implements RepoApi {
 
 class FakeStore implements Store {
   runs: LabelRun[] = [];
-  answers: CachedAnswer[] = [];
-  states = new Map<string, unknown>();
   spent = 0;
   hasLabelRun = async () => this.runs.length > 0;
   usage = async () => this.spent;
@@ -63,14 +61,9 @@ class FakeStore implements Store {
   addUsage = async (_: number, __: string, tokens: number) => {
     this.spent += tokens;
   };
-  saveState = async (key: string, state: unknown) => {
-    this.states.set(key, state);
-  };
-  saveLabelRun = async (run: LabelRun, answers: CachedAnswer[]) => {
+  saveLabelRun = async (run: LabelRun) => {
     this.runs.push(run);
-    this.answers.push(...answers);
   };
-  recordLabelEvent = async () => {};
   saveInstallation = async () => {};
 }
 
@@ -128,12 +121,10 @@ describe("runLabelJob", () => {
     );
     expect(store.spent).toBe(1000);
     expect(store.runs[0]).toMatchObject({
+      installationId: 1,
       model: "jev-1.13.0",
       added: ["bug", "area:map"],
     });
-    expect(store.answers).toHaveLength(3);
-    expect(new Set(store.answers.map((a) => a.stateKey)).size).toBe(1);
-    expect(store.states.size).toBe(1);
   });
 
   it("respects labels someone set while Jev judged", async () => {
@@ -186,10 +177,10 @@ describe("runLabelJob", () => {
 
 function storeRun(): LabelRun {
   return {
+    installationId: 1,
     repoId: 2,
     repo: "o/r",
     number: 3,
-    stateKey: "",
     model: "",
     decisions: [],
     added: [],

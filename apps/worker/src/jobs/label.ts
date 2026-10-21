@@ -1,12 +1,10 @@
 import {
   decideLabels,
-  hashJson,
   labelRequest,
   labelScores,
   parseConfig,
   resolveLabels,
   type Item,
-  type Json,
   type LabelDecision,
   type Request,
   type Response,
@@ -14,7 +12,7 @@ import {
 
 import { budgetPeriod, type Budget } from "../budget.ts";
 import type { RepoApi } from "../github/client.ts";
-import type { CachedAnswer, Store } from "../store.ts";
+import type { Store } from "../store.ts";
 
 export type LabelJob = {
   type: "label";
@@ -99,41 +97,15 @@ export async function runLabelJob(
   const added = decisions.filter((d) => d.add).map((d) => d.label);
   if (added.length > 0) await repo.addLabels(job.number, added);
 
-  const stateKey = await hashJson(request.state);
-  const answers: CachedAnswer[] = [];
-  for (const [key, question] of Object.entries(request.questions)) {
-    const answer = response.answers[key];
-    if (!answer) continue;
-    answers.push({
-      stateKey,
-      questionKey: await hashJson(question),
-      model: response.model,
-      answer: toJson(answer),
-    });
-  }
-  await store.saveState(stateKey, request.state);
-  await store.saveLabelRun(
-    {
-      repoId: job.repoId,
-      repo: job.repo,
-      number: job.number,
-      stateKey,
-      model: response.model,
-      decisions,
-      added,
-      inputTokens: response.usage.input_tokens,
-    },
-    answers,
-  );
+  await store.saveLabelRun({
+    installationId: job.installationId,
+    repoId: job.repoId,
+    repo: job.repo,
+    number: job.number,
+    model: response.model,
+    decisions,
+    added,
+    inputTokens: response.usage.input_tokens,
+  });
   return { status: "labeled", added, decisions, warnings };
-}
-
-function toJson(answer: Response["answers"][string]): Json {
-  return answer.type === "noul"
-    ? { type: "noul", noul: answer.noul }
-    : {
-        type: "choice",
-        choice: answer.choice,
-        probabilities: answer.probabilities,
-      };
 }

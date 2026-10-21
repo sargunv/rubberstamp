@@ -2,7 +2,6 @@ import * as v from "valibot";
 
 import { allowlisted, type Allowlist } from "./allowlist.ts";
 import type { LabelJob } from "./jobs/label.ts";
-import type { LabelEvent } from "./store.ts";
 
 const Repository = v.object({
   id: v.number(),
@@ -10,16 +9,12 @@ const Repository = v.object({
   private: v.boolean(),
 });
 
-const Sender = v.object({ login: v.string(), type: v.string() });
-
-const Item = v.object({ number: v.number(), updated_at: v.string() });
+const Item = v.object({ number: v.number() });
 
 const ItemFields = {
   action: v.string(),
   installation: v.object({ id: v.number() }),
   repository: Repository,
-  sender: Sender,
-  label: v.optional(v.object({ name: v.string() })),
 };
 
 const IssuesEvent = v.object({ ...ItemFields, issue: Item });
@@ -33,10 +28,17 @@ const InstallationEvent = v.object({
   }),
 });
 
+const InstallationRepositoriesEvent = v.object({
+  action: v.string(),
+  installation: v.object({ id: v.number() }),
+  repositories_removed: v.optional(v.array(v.object({ id: v.number() })), []),
+});
+
 export type Effects = {
   jobs: LabelJob[];
-  labelEvents: LabelEvent[];
   installations: { id: number; account: string; deleted: boolean }[];
+  /** Runs to delete: the whole installation's, or only some repositories'. */
+  forget: { installationId: number; repoIds?: number[] }[];
 };
 
 /** Public repositories are open to all; private ones need the allowlist. */
@@ -57,7 +59,7 @@ export function webhookEffects(
   payload: unknown,
   policy: Policy,
 ): Effects {
-  const effects: Effects = { jobs: [], labelEvents: [], installations: [] };
+  const effects: Effects = { jobs: [], installations: [], forget: [] };
 
   if (event === "installation") {
     const parsed = v.safeParse(InstallationEvent, payload);
@@ -67,6 +69,20 @@ export function webhookEffects(
         id: installation.id,
         account: installation.account.login,
         deleted: action === "deleted" || action === "suspend",
+      });
+      if (action === "deleted") {
+        effects.forget.push({ installationId: installation.id });
+      }
+    }
+    return effects;
+  }
+
+  if (event === "installation_repositories") {
+    const parsed = v.safeParse(InstallationRepositoriesEvent, payload);
+    if (parsed.success && parsed.output.action === "removed") {
+      effects.forget.push({
+        installationId: parsed.output.installation.id,
+        repoIds: parsed.output.repositories_removed.map((r) => r.id),
       });
     }
     return effects;
@@ -78,7 +94,7 @@ export function webhookEffects(
       ? v.safeParse(IssuesEvent, payload)
       : v.safeParse(PullRequestEvent, payload);
   if (!parsed.success) return effects;
-  const { action, installation, repository, sender, label } = parsed.output;
+  const { action, installation, repository } = parsed.output;
   if (!allowed(repository, policy)) return effects;
   const item =
     "issue" in parsed.output ? parsed.output.issue : parsed.output.pull_request;
@@ -90,17 +106,6 @@ export function webhookEffects(
       repoId: repository.id,
       repo: repository.full_name,
       number: item.number,
-    });
-  }
-  if ((action === "labeled" || action === "unlabeled") && label) {
-    effects.labelEvents.push({
-      repoId: repository.id,
-      number: item.number,
-      label: label.name,
-      action,
-      actor: sender.login,
-      actorIsBot: sender.type === "Bot",
-      at: item.updated_at,
     });
   }
   return effects;

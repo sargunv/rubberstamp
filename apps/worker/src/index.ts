@@ -18,6 +18,9 @@ const Job = v.object({
   number: v.number(),
 });
 
+/** How long a live run's decisions are kept. */
+const RUN_RETENTION_DAYS = 180;
+
 function policy(env: Env): Policy {
   return { privateAllowlist: parseAllowlist(env.PRIVATE_ALLOWLIST) };
 }
@@ -34,15 +37,15 @@ app.post("/webhooks/github", async (c) => {
   }
   const event = c.req.header("X-GitHub-Event") ?? "";
   const effects = webhookEffects(event, JSON.parse(body), policy(c.env));
-  const store = new CloudflareStore(c.env.DB, c.env.STATES);
+  const store = new CloudflareStore(c.env.DB);
   await Promise.all([
     effects.jobs.length > 0
       ? c.env.JOBS.sendBatch(effects.jobs.map((body) => ({ body })))
       : undefined,
-    ...effects.labelEvents.map((e) => store.recordLabelEvent(e)),
     ...effects.installations.map((i) =>
       store.saveInstallation(i.id, i.account, i.deleted),
     ),
+    ...effects.forget.map((f) => store.forgetRuns(f.installationId, f.repoIds)),
   ]);
   return c.body(null, 204);
 });
@@ -50,9 +53,13 @@ app.post("/webhooks/github", async (c) => {
 export default {
   fetch: app.fetch,
 
+  async scheduled(_controller, env) {
+    await new CloudflareStore(env.DB).pruneRuns(RUN_RETENTION_DAYS);
+  },
+
   async queue(batch, env) {
     const github = new GitHubApp(env.GITHUB_CLIENT_ID, env.GITHUB_PRIVATE_KEY);
-    const store = new CloudflareStore(env.DB, env.STATES);
+    const store = new CloudflareStore(env.DB);
     const budgets = v.parse(Budgets, env.BUDGETS);
     const jev = (request: Request) =>
       ask(request, { apiKey: env.TYPESAFE_API_KEY });

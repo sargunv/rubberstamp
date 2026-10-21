@@ -10,7 +10,7 @@ private repositories only on an allowlist. Runs on Cloudflare Workers.
 packages/core   pure TS shared by the worker and the web UI: config schema,
                 question building, decisions, state description, Jev client
 apps/worker     Cloudflare Worker: GitHub webhooks, queue consumer, jobs,
-                D1 store (migrations/), R2 state snapshots
+                D1 store (migrations/), daily cleanup
 README.md       what Rubberstamp does and the configuration reference
 ```
 
@@ -20,11 +20,11 @@ README.md       what Rubberstamp does and the configuration reference
   a change merges.
 - `mise run test`: unit tests only.
 - `mise run fix`: apply formatters and auto-fixable lint.
-- `mise run worker:dev`: run the Worker locally against local D1, R2, and
-  Queues. Put secrets in `apps/worker/.dev.vars` (gitignored).
+- `mise run worker:dev`: run the Worker locally against local D1 and Queues. Put
+  secrets in `apps/worker/.dev.vars` (gitignored).
 - `mise run deploy`: create missing queues, migrate D1, and deploy the Worker
-  with its secrets from fnox. Wrangler creates the D1 database and R2 bucket
-  itself and finds them by name afterward.
+  with its secrets from fnox. Wrangler creates the D1 database itself and finds
+  it by name afterward.
 - `mise run worker:types`: regenerate binding types after editing
   `apps/worker/wrangler.jsonc`.
 
@@ -46,6 +46,10 @@ them itself from `.github/rubberstamp.yml`, so don't label by hand.
   that configuration. Nothing a caller sends becomes a question.
 - Decision logic in `packages/core` stays pure and runtime-agnostic so the web
   UI can re-run it over cached answers without inference.
-- Answers are cached per (state hash, question hash, answering model version).
+- Tuning caches answers per (state hash, question hash, answering model
+  version). Live labeling keeps only its decisions, never states or answers.
+- Spend nothing on a repository until someone uses it there: a repository
+  without configuration stores nothing, and tuning data is built on demand and
+  expires.
 - Every degraded path is safe: over budget or on error, add no labels and run
   every CI unit.

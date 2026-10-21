@@ -1,31 +1,14 @@
-import type { Json, LabelDecision } from "@sargunv/rubberstamp-core";
+import type { LabelDecision } from "@sargunv/rubberstamp-core";
 
 export type LabelRun = {
+  installationId: number;
   repoId: number;
   repo: string;
   number: number;
-  stateKey: string;
   model: string;
   decisions: LabelDecision[];
   added: string[];
   inputTokens: number;
-};
-
-export type CachedAnswer = {
-  stateKey: string;
-  questionKey: string;
-  model: string;
-  answer: Json;
-};
-
-export type LabelEvent = {
-  repoId: number;
-  number: number;
-  label: string;
-  action: "labeled" | "unlabeled";
-  actor: string;
-  actorIsBot: boolean;
-  at: string;
 };
 
 export interface Store {
@@ -37,9 +20,7 @@ export interface Store {
     period: string,
     tokens: number,
   ): Promise<void>;
-  saveState(key: string, state: Json): Promise<void>;
-  saveLabelRun(run: LabelRun, answers: CachedAnswer[]): Promise<void>;
-  recordLabelEvent(event: LabelEvent): Promise<void>;
+  saveLabelRun(run: LabelRun): Promise<void>;
   saveInstallation(
     id: number,
     account: string,
@@ -48,10 +29,7 @@ export interface Store {
 }
 
 export class CloudflareStore implements Store {
-  constructor(
-    private readonly db: D1Database,
-    private readonly states: R2Bucket,
-  ) {}
+  constructor(private readonly db: D1Database) {}
 
   async hasLabelRun(repoId: number, number: number): Promise<boolean> {
     const row = await this.db
@@ -92,60 +70,22 @@ export class CloudflareStore implements Store {
       .run();
   }
 
-  async saveState(key: string, state: Json) {
-    await this.states.put(`states/${key}.json`, JSON.stringify(state), {
-      httpMetadata: { contentType: "application/json" },
-    });
-  }
-
-  async saveLabelRun(run: LabelRun, answers: CachedAnswer[]) {
-    const insertAnswer = this.db.prepare(
-      `INSERT OR REPLACE INTO answers (state_key, question_key, model, answer)
-       VALUES (?, ?, ?, ?)`,
-    );
-    await this.db.batch([
-      this.db
-        .prepare(
-          `INSERT INTO label_runs
-             (repo_id, repo, number, state_key, model, decisions, added, input_tokens)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(
-          run.repoId,
-          run.repo,
-          run.number,
-          run.stateKey,
-          run.model,
-          JSON.stringify(run.decisions),
-          JSON.stringify(run.added),
-          run.inputTokens,
-        ),
-      ...answers.map((row) =>
-        insertAnswer.bind(
-          row.stateKey,
-          row.questionKey,
-          row.model,
-          JSON.stringify(row.answer),
-        ),
-      ),
-    ]);
-  }
-
-  async recordLabelEvent(event: LabelEvent) {
+  async saveLabelRun(run: LabelRun) {
     await this.db
       .prepare(
-        `INSERT INTO label_events
-           (repo_id, number, label, action, actor, actor_is_bot, at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO label_runs
+           (installation_id, repo_id, repo, number, model, decisions, added, input_tokens)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
-        event.repoId,
-        event.number,
-        event.label,
-        event.action,
-        event.actor,
-        event.actorIsBot ? 1 : 0,
-        event.at,
+        run.installationId,
+        run.repoId,
+        run.repo,
+        run.number,
+        run.model,
+        JSON.stringify(run.decisions),
+        JSON.stringify(run.added),
+        run.inputTokens,
       )
       .run();
   }
@@ -160,6 +100,31 @@ export class CloudflareStore implements Store {
            updated_at = datetime('now')`,
       )
       .bind(id, account, deleted ? 1 : 0)
+      .run();
+  }
+
+  /** Forgets an installation's runs, or only those of some repositories. */
+  async forgetRuns(installationId: number, repoIds?: number[]) {
+    if (repoIds === undefined) {
+      await this.db
+        .prepare("DELETE FROM label_runs WHERE installation_id = ?")
+        .bind(installationId)
+        .run();
+      return;
+    }
+    const remove = this.db.prepare(
+      "DELETE FROM label_runs WHERE installation_id = ? AND repo_id = ?",
+    );
+    if (repoIds.length > 0) {
+      await this.db.batch(repoIds.map((id) => remove.bind(installationId, id)));
+    }
+  }
+
+  /** Deletes runs older than the given number of days. */
+  async pruneRuns(days: number) {
+    await this.db
+      .prepare("DELETE FROM label_runs WHERE created_at < datetime('now', ?)")
+      .bind(`-${days} days`)
       .run();
   }
 }

@@ -14,9 +14,8 @@ function payload(overrides: { private?: boolean; owner?: string } = {}) {
       full_name: `${overrides.owner ?? "maplibre"}/maplibre-native-ffi`,
       private: overrides.private ?? false,
     },
-    sender: { login: "someone", type: "User" },
-    pull_request: { number: 12, updated_at: "2026-10-20T00:00:00Z" },
-    issue: { number: 13, updated_at: "2026-10-20T00:00:00Z" },
+    pull_request: { number: 12 },
+    issue: { number: 13 },
   };
 }
 
@@ -49,49 +48,41 @@ describe("webhookEffects", () => {
     ).toHaveLength(1);
   });
 
-  it("records label changes and who made them", () => {
-    const effects = webhookEffects(
-      "issues",
-      {
-        ...payload(),
-        action: "unlabeled",
-        label: { name: "bug" },
-        sender: { login: "rubberstamp[bot]", type: "Bot" },
-      },
-      policy,
-    );
-    expect(effects.jobs).toEqual([]);
-    expect(effects.labelEvents).toEqual([
-      {
-        repoId: 42,
-        number: 13,
-        label: "bug",
-        action: "unlabeled",
-        actor: "rubberstamp[bot]",
-        actorIsBot: true,
-        at: "2026-10-20T00:00:00Z",
-      },
-    ]);
-  });
-
-  it("tracks installations and ignores other events", () => {
-    expect(
+  it("tracks installations, forgets them when uninstalled, and ignores other events", () => {
+    const installation = (action: string) =>
       webhookEffects(
         "installation",
-        {
-          action: "deleted",
-          installation: { id: 7, account: { login: "maplibre" } },
-        },
+        { action, installation: { id: 7, account: { login: "maplibre" } } },
         policy,
-      ).installations,
-    ).toEqual([{ id: 7, account: "maplibre", deleted: true }]);
+      );
+    expect(installation("deleted")).toEqual({
+      jobs: [],
+      installations: [{ id: 7, account: "maplibre", deleted: true }],
+      forget: [{ installationId: 7 }],
+    });
+    expect(installation("suspend").forget).toEqual([]);
+    expect(installation("unsuspend").installations[0]?.deleted).toBe(false);
     expect(webhookEffects("push", payload(), policy)).toEqual({
       jobs: [],
-      labelEvents: [],
       installations: [],
+      forget: [],
     });
     expect(webhookEffects("issues", { nonsense: true }, policy).jobs).toEqual(
       [],
     );
+  });
+
+  it("forgets repositories removed from an installation", () => {
+    expect(
+      webhookEffects(
+        "installation_repositories",
+        {
+          action: "removed",
+          installation: { id: 7 },
+          repositories_removed: [{ id: 42 }, { id: 43 }],
+        },
+        policy,
+      ).forget,
+    ).toEqual([{ installationId: 7, repoIds: [42, 43] }]);
   });
 });
