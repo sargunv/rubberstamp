@@ -104,8 +104,12 @@ export type Claim = {
   key: string;
 };
 
-/** The longest a queue consumer can run, after which its claim lapses. */
-export const CLAIM_MINUTES = 15;
+/**
+ * How long a claim holds. Jev answers in about a second, so even a long patch
+ * with retries finishes well within it, and a job that died holding a claim
+ * frees it soon. A job that outlives it risks only a duplicate request.
+ */
+export const CLAIM_MINUTES = 2;
 
 /** What spent Jev usage, within the same allowance. */
 export type UsageKind = "labels" | "ci";
