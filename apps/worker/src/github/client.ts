@@ -116,6 +116,14 @@ const WorkflowRun = v.object({
   path: v.string(),
   created_at: v.string(),
   repository: v.object({ id: v.number() }),
+  /** The pull requests the run is for. Empty for a run from a fork. */
+  pull_requests: v.array(
+    v.object({
+      number: v.number(),
+      base: v.object({ ref: v.string(), sha: v.string() }),
+      head: v.object({ ref: v.string(), sha: v.string() }),
+    }),
+  ),
 });
 
 export type WorkflowRun = v.InferOutput<typeof WorkflowRun>;

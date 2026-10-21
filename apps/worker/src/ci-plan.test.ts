@@ -275,7 +275,17 @@ describe("ciPlan", () => {
   describe("records the units the asking run executes", () => {
     const run = { run_id: 9001, run_attempt: 2 };
 
-    /** The run as GitHub reports it, started an hour ago at the head. */
+    /** GitHub's listing of a run for a pull request. */
+    const listing = (number: number, ref: string) => ({
+      number,
+      base: { ref, sha: "base123" },
+      head: { ref: "fix-camera", sha: HEAD },
+    });
+
+    /**
+     * The run as GitHub reports it, started an hour ago at the head and
+     * listed for this pull request.
+     */
     const ranOn = (repo: FakeRepo, overrides: Partial<WorkflowRun> = {}) => {
       repo.workflowRuns.set(9001, {
         id: 9001,
@@ -284,9 +294,28 @@ describe("ciPlan", () => {
         path: ".github/workflows/ci.yml",
         created_at: "2026-10-21T11:00:00Z",
         repository: { id: repo.repoId },
+        pull_requests: [listing(3, "main")],
         ...overrides,
       });
     };
+
+    it("from a fork's run, which GitHub lists for no pull request", async () => {
+      const { deps, repo, save, store } = setup();
+      ranOn(repo, { pull_requests: [] });
+      await save(HEAD, judged);
+
+      await ciPlan(query(run), null, deps);
+      expect(store.ciRuns.get("2 9001 2")?.units).toEqual(["linux"]);
+    });
+
+    it("from a run listed for several pull requests, this one included", async () => {
+      const { deps, repo, save, store } = setup();
+      ranOn(repo, { pull_requests: [listing(7, "main"), listing(3, "main")] });
+      await save(HEAD, judged);
+
+      await ciPlan(query(run), null, deps);
+      expect(store.ciRuns.size).toBe(1);
+    });
 
     it.each([[".github/workflows/ci.yml"], [".github/workflows/ci.yml@main"]])(
       "from the plan it follows, for a run of %s",
@@ -415,6 +444,14 @@ describe("ciPlan", () => {
       ],
       ["of a workflow named like it", { path: ".github/workflows/ci.yml.bak" }],
       ["started over a day ago", { created_at: "2026-10-20T11:59:59Z" }],
+      [
+        "listed for another pull request",
+        { pull_requests: [listing(7, "main")] },
+      ],
+      [
+        "listed for this pull request under another base",
+        { pull_requests: [listing(3, "release")] },
+      ],
     ])("but not for a run %s", async (_, overrides) => {
       const { deps, repo, save, store } = setup();
       ranOn(repo, overrides);

@@ -96,12 +96,22 @@ async function runAsked(
   runId: number,
   workflow: string,
   query: PlanQuery,
+  baseRef: string,
   now: Date,
 ): Promise<boolean> {
   try {
     const run = await repo.workflowRun(runId);
+    if (run === null) return false;
+    // Only a run GitHub lists for this pull request, as it targets now,
+    // vouches for it. GitHub lists none for a run from a fork, which leaves
+    // the head, event, workflow, and age to tie it to this pull request.
+    const listed =
+      run.pull_requests.length === 0 ||
+      run.pull_requests.some(
+        (pr) => pr.number === query.pull_request && pr.base.ref === baseRef,
+      );
     return (
-      run !== null &&
+      listed &&
       run.repository.id === repoId &&
       run.event === "pull_request" &&
       // GitHub can suffix the ref the file came from, as in `ci.yml@main`,
@@ -183,6 +193,7 @@ export async function ciPlan(
       query.run_id,
       workflow,
       query,
+      pull.base.ref,
       now,
     );
     if (!asked) return;
