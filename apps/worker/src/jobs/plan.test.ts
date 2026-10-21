@@ -492,6 +492,53 @@ describe("runPlanJob since a unit last passed", () => {
     expect(JSON.stringify(requests[0]?.state)).not.toContain("apple");
   });
 
+  it("runs every unit, even one that passed here, when a later group fails", async () => {
+    const { repo, store } = setup(
+      [MAP],
+      [{ unit: "linux-x64", head: "abc123", base: "base123" }],
+    );
+    const outcome = await runPlanJob(
+      job,
+      deps(repo, store, {
+        ask: async () => {
+          throw new Error("Jev returned 500");
+        },
+      }),
+    );
+    expect(outcome).toMatchObject({
+      decisions: [
+        { unit: "linux-x64", run: true, score: null, rule: "selection failed" },
+        { unit: "macos", run: true, score: null, rule: "selection failed" },
+      ],
+    });
+  });
+
+  it("drops earlier groups' scores when a later group runs out of budget", async () => {
+    const { repo, store } = setup(
+      [MAP],
+      [{ unit: "linux-x64", head: OLD, base: OLD_BASE }],
+    );
+    repo.comparisons.set(`${OLD_BASE}...${OLD}`, []);
+    const requests: Request[] = [];
+    await runPlanJob(
+      job,
+      deps(repo, store, {
+        ask: jev(requests),
+        budget: { installation: 1000, global: 100_000 },
+      }),
+    );
+    // The merge-base group was answered; the group since the pass wasn't.
+    expect(requests).toHaveLength(1);
+    expect(store.plans[0]).toMatchObject({
+      model: "jev-1.13.0",
+      inputTokens: 1000,
+    });
+    expect(store.plans[0]?.decisions.map((d) => [d.run, d.rule])).toEqual([
+      [true, "monthly budget spent"],
+      [true, "monthly budget spent"],
+    ]);
+  });
+
   it("judges each pass's units on their own changes", async () => {
     const { repo, requests, run } = setup(
       [MAP],

@@ -162,16 +162,25 @@ async function judge(
   );
 
   const responses: Response[] = [];
+  const asked = () => ({
+    model: responses[0]?.model ?? null,
+    inputTokens: responses.reduce((sum, r) => sum + r.usage.input_tokens, 0),
+  });
+  // Any degraded path runs every unit, even those a pass or an earlier group
+  // already decided. A fallback after some chunks were answered still records
+  // what they spent.
+  const fallback = (rule: string): Judged => ({
+    decisions: everyUnit(units, rule),
+    ...asked(),
+  });
   const period = budgetPeriod(deps.now?.() ?? new Date());
-  // Why the judgments not yet asked about run every unit, once one has.
-  let stopped: string | null = null;
-  for (const { units, files: changed, since } of judgments) {
+  for (const { units: group, files: changed, since } of judgments) {
     const requests =
-      stopped !== null || files.length < pull.changed_files
+      files.length < pull.changed_files
         ? null
         : planRequests(
             config,
-            units,
+            group,
             {
               title: pull.title,
               body: pull.body,
@@ -180,20 +189,17 @@ async function judge(
             },
             deps.model,
           );
-    if (requests === null) {
-      decide(everyUnit(units, stopped ?? "too large to judge"));
-      continue;
-    }
+    if (requests === null) return fallback("too large to judge");
     const answers: Response["answers"][] = [];
     try {
       for (const request of requests) {
-        stopped = await budgetSpent(
+        const spent = await budgetSpent(
           deps.store,
           job.installationId,
           period,
           deps.budget,
         );
-        if (stopped !== null) break;
+        if (spent) return fallback(spent);
         const response = await deps.ask(request);
         await deps.store.addUsage(
           job.installationId,
@@ -208,25 +214,16 @@ async function judge(
     } catch (error) {
       // Selection only saves CI time, so any failure runs everything.
       console.error(`${job.repo}#${job.number} selection failed`, error);
-      stopped = "selection failed";
+      return fallback("selection failed");
     }
-    if (stopped !== null) {
-      decide(everyUnit(units, stopped));
-      continue;
-    }
-    const scores = unitScores(units, answers);
-    decide(
-      scores === null
-        ? everyUnit(units, "selection failed")
-        : decideUnits(units, scores, changedPaths(changed), since),
-    );
+    const scores = unitScores(group, answers);
+    if (scores === null) return fallback("selection failed");
+    decide(decideUnits(group, scores, changedPaths(changed), since));
   }
 
   return {
     decisions: units.flatMap((unit) => decided.get(unit.id) ?? []),
-    // A fallback after some chunks were answered still records what they spent.
-    model: responses[0]?.model ?? null,
-    inputTokens: responses.reduce((sum, r) => sum + r.usage.input_tokens, 0),
+    ...asked(),
   };
 }
 
