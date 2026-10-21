@@ -15,6 +15,7 @@ import {
 
 import { budgetPeriod, budgetSpent } from "../budget.ts";
 import type { Pull } from "../github/client.ts";
+import { claimed } from "./claim.ts";
 import type { LabelDeps } from "./label.ts";
 
 export type PlanJob = {
@@ -33,6 +34,8 @@ export type PlanDeps = LabelDeps;
 
 export type PlanOutcome =
   | { status: "skipped"; reason: string; warnings?: string[] }
+  /** Another job holds the claim; try again once it lapses. */
+  | { status: "busy" }
   | { status: "planned"; decisions: UnitDecision[] };
 
 type Judged = {
@@ -75,22 +78,36 @@ export async function runPlanJob(
   const files = await repo.pullFiles(job.number);
   if (!(await current())) return { status: "skipped", reason: "superseded" };
 
-  const judged = await judge(job, deps, pull, files, units, parsed.config);
-  // Judging can take a while, and a plan for a head the pull request has left
-  // would show as its latest.
-  if (!(await current())) return { status: "skipped", reason: "superseded" };
-  await store.savePlan({
-    installationId: job.installationId,
-    repoId: job.repoId,
-    repo: job.repo,
-    number: job.number,
-    title: pull.title,
-    head: pull.head.sha,
-    baseRef: pull.base.ref,
-    base: pull.base.sha,
-    ...judged,
-  });
-  return { status: "planned", decisions: judged.decisions };
+  const outcome = await claimed(
+    store,
+    {
+      kind: "plan",
+      repoId: job.repoId,
+      number: job.number,
+      key: `${job.head} ${job.base}`,
+    },
+    async (): Promise<PlanOutcome> => {
+      const judged = await judge(job, deps, pull, files, units, parsed.config);
+      // Judging can take a while, and a plan for a head the pull request has
+      // left would show as its latest.
+      if (!(await current())) {
+        return { status: "skipped", reason: "superseded" };
+      }
+      await store.savePlan({
+        installationId: job.installationId,
+        repoId: job.repoId,
+        repo: job.repo,
+        number: job.number,
+        title: pull.title,
+        head: pull.head.sha,
+        baseRef: pull.base.ref,
+        base: pull.base.sha,
+        ...judged,
+      });
+      return { status: "planned", decisions: judged.decisions };
+    },
+  );
+  return outcome ?? { status: "busy" };
 }
 
 /** Ask Jev about the change, or plan every unit when it can't or shouldn't. */

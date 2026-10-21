@@ -1,7 +1,7 @@
 import type { PullFile, Request, Response } from "@sargunv/rubberstamp-core";
 
 import type { Issue, ListedItem, RepoApi } from "./github/client.ts";
-import type { CiPlan, LabelRun, Store, UsageKind } from "./store.ts";
+import type { CiPlan, Claim, LabelRun, Store, UsageKind } from "./store.ts";
 
 export const CONFIG = `
 context: A C API for MapLibre Native.
@@ -108,6 +108,18 @@ export class FakeStore implements Store {
     this.runs.push(run);
   };
   saveInstallation = async () => {};
+  /** Each held claim's owner, by claim. */
+  claims = new Map<string, string>();
+  claim = async (claim: Claim, owner: string) => {
+    const key = JSON.stringify(claim);
+    if (this.claims.has(key)) return false;
+    this.claims.set(key, owner);
+    return true;
+  };
+  release = async (claim: Claim, owner: string) => {
+    const key = JSON.stringify(claim);
+    if (this.claims.get(key) === owner) this.claims.delete(key);
+  };
   plans: CiPlan[] = [];
   hasPlan = async (_: number, __: number, head: string, baseRef: string) =>
     this.plans.some((plan) => plan.head === head && plan.baseRef === baseRef);

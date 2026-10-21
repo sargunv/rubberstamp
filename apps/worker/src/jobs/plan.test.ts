@@ -165,6 +165,36 @@ describe("runPlanJob", () => {
     expect(store.plans.map((p) => p.baseRef)).toEqual(["main", "release"]);
   });
 
+  it("leaves a head to the job that claimed it first", async () => {
+    const store = new FakeStore();
+    await store.claim(
+      { kind: "plan", repoId: 2, number: 3, key: "abc123 main" },
+      "another job",
+    );
+    const requests: Request[] = [];
+    expect(
+      await runPlanJob(
+        job,
+        deps(new FakeRepo(CONFIG, pull), store, { ask: jev(requests) }),
+      ),
+    ).toEqual({ status: "busy" });
+    expect(requests).toEqual([]);
+  });
+
+  it("releases its claim when it fails, so the retry can plan", async () => {
+    const store = new FakeStore();
+    const repo = new FakeRepo(CONFIG, pull);
+    const save = store.savePlan;
+    store.savePlan = async () => {
+      throw new Error("D1 is down");
+    };
+    await expect(runPlanJob(job, deps(repo, store))).rejects.toThrow();
+    store.savePlan = save;
+    expect(await runPlanJob(job, deps(repo, store))).toMatchObject({
+      status: "planned",
+    });
+  });
+
   it("does nothing without ci units", async () => {
     const store = new FakeStore();
     const outcome = await runPlanJob(

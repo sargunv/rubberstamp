@@ -96,6 +96,21 @@ function activityItem(row: Record<string, unknown>): ActivityItem {
   };
 }
 
+/** Work a job reserves before spending on it. */
+export type Claim = {
+  kind: "label" | "plan";
+  repoId: number;
+  number: number;
+  key: string;
+};
+
+/**
+ * How long a claim holds. Jev answers in about a second, so even a long patch
+ * with retries finishes well within it, and a job that died holding a claim
+ * frees it soon. A job that outlives it risks only a duplicate request.
+ */
+export const CLAIM_MINUTES = 2;
+
 /** What spent Jev usage, within the same allowance. */
 export type UsageKind = "labels" | "ci";
 
@@ -139,6 +154,10 @@ export interface Store {
     tokens: number,
   ): Promise<void>;
   saveLabelRun(run: LabelRun): Promise<void>;
+  /** Whether `owner` now holds the claim; false if another job does. */
+  claim(claim: Claim, owner: string): Promise<boolean>;
+  /** Release the claim if `owner` still holds it. */
+  release(claim: Claim, owner: string): Promise<void>;
   hasPlan(
     repoId: number,
     number: number,
@@ -267,6 +286,36 @@ export class CloudflareStore implements Store {
          DO UPDATE SET input_tokens = input_tokens + excluded.input_tokens`,
       )
       .bind(installationId, period, repo, kind, tokens)
+      .run();
+  }
+
+  async claim(claim: Claim, owner: string) {
+    const result = await this.db
+      .prepare(
+        `INSERT INTO claims (kind, repo_id, number, key, owner) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (kind, repo_id, number, key) DO UPDATE
+         SET owner = excluded.owner, claimed_at = datetime('now')
+         WHERE claimed_at < datetime('now', ?)`,
+      )
+      .bind(
+        claim.kind,
+        claim.repoId,
+        claim.number,
+        claim.key,
+        owner,
+        `-${CLAIM_MINUTES} minutes`,
+      )
+      .run();
+    return result.meta.changes > 0;
+  }
+
+  async release(claim: Claim, owner: string) {
+    await this.db
+      .prepare(
+        `DELETE FROM claims
+         WHERE kind = ? AND repo_id = ? AND number = ? AND key = ? AND owner = ?`,
+      )
+      .bind(claim.kind, claim.repoId, claim.number, claim.key, owner)
       .run();
   }
 
@@ -406,14 +455,19 @@ export class CloudflareStore implements Store {
     if (removals.length > 0) await this.db.batch(removals);
   }
 
-  /** Deletes runs and plans older than the given number of days. */
+  /** Deletes runs and plans older than the given number of days, and old claims. */
   async pruneRuns(days: number) {
-    await this.db.batch(
-      ["label_runs", "ci_plans"].map((table) =>
+    await this.db.batch([
+      ...["label_runs", "ci_plans"].map((table) =>
         this.db
           .prepare(`DELETE FROM ${table} WHERE created_at < datetime('now', ?)`)
           .bind(`-${days} days`),
       ),
-    );
+      // A claim matters only while its job runs, and the run or plan it saves
+      // keeps the work from repeating after that.
+      this.db.prepare(
+        "DELETE FROM claims WHERE claimed_at < datetime('now', '-1 day')",
+      ),
+    ]);
   }
 }
