@@ -241,12 +241,13 @@ describe("ciPlan", () => {
 
   it("frees the request when queueing fails, so the next ask can start it", async () => {
     const { deps, jobs } = setup();
-    const enqueue = deps.enqueue;
-    deps.enqueue = async () => {
-      throw new Error("queue unavailable");
+    let down = true;
+    deps.enqueue = async (job) => {
+      if (down) throw new Error("queue unavailable");
+      jobs.push(job);
     };
     await expect(ciPlan(query({ start: true }), null, deps)).rejects.toThrow();
-    deps.enqueue = enqueue;
+    down = false;
     await ciPlan(query({ start: true }), null, deps);
     expect(jobs).toHaveLength(1);
   });
