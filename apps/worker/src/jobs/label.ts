@@ -14,6 +14,7 @@ import {
 import { budgetPeriod, budgetSpent, type Budget } from "../budget.ts";
 import type { RepoApi } from "../github/client.ts";
 import type { Store } from "../store.ts";
+import { claimed } from "./claim.ts";
 
 export type LabelJob = {
   type: "label";
@@ -76,45 +77,52 @@ export async function runLabelJob(
   );
   if (spent) return { status: "skipped", reason: spent, warnings };
 
-  const issue = await repo.issue(job.number);
-  const item: Item =
-    issue.pull_request === undefined
-      ? { type: "issue", title: issue.title, body: issue.body }
-      : {
-          type: "pull request",
-          title: issue.title,
-          body: issue.body,
-          files: await repo.pullFiles(job.number),
-        };
-  const request = labelRequest(config, groups, item, deps.model);
-  const response = await deps.ask(request);
-  await store.addUsage(
-    job.installationId,
-    period,
-    job.repo,
-    "labels",
-    response.usage.input_tokens,
+  const outcome = await claimed(
+    store,
+    { kind: "label", repoId: job.repoId, number: job.number, key: "" },
+    async (): Promise<LabelOutcome> => {
+      const issue = await repo.issue(job.number);
+      const item: Item =
+        issue.pull_request === undefined
+          ? { type: "issue", title: issue.title, body: issue.body }
+          : {
+              type: "pull request",
+              title: issue.title,
+              body: issue.body,
+              files: await repo.pullFiles(job.number),
+            };
+      const request = labelRequest(config, groups, item, deps.model);
+      const response = await deps.ask(request);
+      await store.addUsage(
+        job.installationId,
+        period,
+        job.repo,
+        "labels",
+        response.usage.input_tokens,
+      );
+
+      const scores = labelScores(groups, response.answers);
+      // Read the labels again in case someone labeled the item while Jev judged it.
+      const present = (await repo.issue(job.number)).labels.map((l) => l.name);
+      const decisions = decideLabels(groups, scores, present);
+      const added = decisions.filter((d) => d.add).map((d) => d.label);
+      if (added.length > 0) await repo.addLabels(job.number, added);
+
+      await store.saveLabelRun({
+        installationId: job.installationId,
+        repoId: job.repoId,
+        repo: job.repo,
+        number: job.number,
+        title: issue.title,
+        type: item.type,
+        model: response.model,
+        groups: previewGroups(groups),
+        decisions,
+        added,
+        inputTokens: response.usage.input_tokens,
+      });
+      return { status: "labeled", added, decisions, warnings };
+    },
   );
-
-  const scores = labelScores(groups, response.answers);
-  // Read the labels again in case someone labeled the item while Jev judged it.
-  const present = (await repo.issue(job.number)).labels.map((l) => l.name);
-  const decisions = decideLabels(groups, scores, present);
-  const added = decisions.filter((d) => d.add).map((d) => d.label);
-  if (added.length > 0) await repo.addLabels(job.number, added);
-
-  await store.saveLabelRun({
-    installationId: job.installationId,
-    repoId: job.repoId,
-    repo: job.repo,
-    number: job.number,
-    title: issue.title,
-    type: item.type,
-    model: response.model,
-    groups: previewGroups(groups),
-    decisions,
-    added,
-    inputTokens: response.usage.input_tokens,
-  });
-  return { status: "labeled", added, decisions, warnings };
+  return outcome ?? { status: "skipped", reason: "in progress", warnings };
 }

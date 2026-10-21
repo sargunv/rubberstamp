@@ -96,6 +96,17 @@ function activityItem(row: Record<string, unknown>): ActivityItem {
   };
 }
 
+/** Work a job reserves before spending on it. */
+export type Claim = {
+  kind: "label" | "plan";
+  repoId: number;
+  number: number;
+  key: string;
+};
+
+// The longest a queue consumer can run, after which its claim lapses.
+const CLAIM_MINUTES = 15;
+
 /** What spent Jev usage, within the same allowance. */
 export type UsageKind = "labels" | "ci";
 
@@ -139,6 +150,9 @@ export interface Store {
     tokens: number,
   ): Promise<void>;
   saveLabelRun(run: LabelRun): Promise<void>;
+  /** Whether this job now holds the claim; false if another job does. */
+  claim(claim: Claim): Promise<boolean>;
+  release(claim: Claim): Promise<void>;
   hasPlan(
     repoId: number,
     number: number,
@@ -267,6 +281,34 @@ export class CloudflareStore implements Store {
          DO UPDATE SET input_tokens = input_tokens + excluded.input_tokens`,
       )
       .bind(installationId, period, repo, kind, tokens)
+      .run();
+  }
+
+  async claim(claim: Claim) {
+    const result = await this.db
+      .prepare(
+        `INSERT INTO claims (kind, repo_id, number, key) VALUES (?, ?, ?, ?)
+         ON CONFLICT (kind, repo_id, number, key) DO UPDATE
+         SET claimed_at = datetime('now')
+         WHERE claimed_at < datetime('now', ?)`,
+      )
+      .bind(
+        claim.kind,
+        claim.repoId,
+        claim.number,
+        claim.key,
+        `-${CLAIM_MINUTES} minutes`,
+      )
+      .run();
+    return result.meta.changes > 0;
+  }
+
+  async release(claim: Claim) {
+    await this.db
+      .prepare(
+        "DELETE FROM claims WHERE kind = ? AND repo_id = ? AND number = ? AND key = ?",
+      )
+      .bind(claim.kind, claim.repoId, claim.number, claim.key)
       .run();
   }
 
@@ -406,14 +448,19 @@ export class CloudflareStore implements Store {
     if (removals.length > 0) await this.db.batch(removals);
   }
 
-  /** Deletes runs and plans older than the given number of days. */
+  /** Deletes runs and plans older than the given number of days, and old claims. */
   async pruneRuns(days: number) {
-    await this.db.batch(
-      ["label_runs", "ci_plans"].map((table) =>
+    await this.db.batch([
+      ...["label_runs", "ci_plans"].map((table) =>
         this.db
           .prepare(`DELETE FROM ${table} WHERE created_at < datetime('now', ?)`)
           .bind(`-${days} days`),
       ),
-    );
+      // A claim matters only while its job runs, and the run or plan it saves
+      // keeps the work from repeating after that.
+      this.db.prepare(
+        "DELETE FROM claims WHERE claimed_at < datetime('now', '-1 day')",
+      ),
+    ]);
   }
 }

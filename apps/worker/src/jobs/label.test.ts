@@ -64,6 +64,38 @@ describe("runLabelJob", () => {
     expect(repo.added).toEqual(["area:map"]);
   });
 
+  it("leaves an item to the job that claimed it first, and frees it on failure", async () => {
+    const options = (store: FakeStore, ask = jev([])) => ({
+      repo: new FakeRepo(CONFIG, pull),
+      store,
+      ask,
+      model: "m",
+      budget: { installation: 10_000, global: 100_000 },
+    });
+    const claim = { kind: "label", repoId: 2, number: 3, key: "" } as const;
+
+    const busy = new FakeStore();
+    await busy.claim(claim);
+    const requests: Request[] = [];
+    expect(await runLabelJob(job, options(busy, jev(requests)))).toMatchObject({
+      reason: "in progress",
+    });
+    expect(requests).toEqual([]);
+
+    const failing = new FakeStore();
+    await expect(
+      runLabelJob(
+        job,
+        options(failing, async () => {
+          throw new Error("Jev returned 500");
+        }),
+      ),
+    ).rejects.toThrow();
+    expect(await runLabelJob(job, options(failing))).toMatchObject({
+      status: "labeled",
+    });
+  });
+
   it("skips without config, with invalid config, when judged, or over budget", async () => {
     const options = (repo: RepoApi, store = new FakeStore()) => ({
       repo,
