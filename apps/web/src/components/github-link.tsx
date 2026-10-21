@@ -7,7 +7,7 @@ export function GitHubLink({ href, label }: { href: string; label: string }) {
       href={href}
       aria-label={label}
       title={label}
-      className="inline-flex shrink-0 rounded-[3px] p-1 text-muted hover:text-ink"
+      className="inline-flex shrink-0 rounded-sm p-1 text-muted hover:text-ink"
     >
       <MarkGithubIcon size={24} className="fill-current" />
     </a>

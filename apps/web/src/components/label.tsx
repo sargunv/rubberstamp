@@ -1,6 +1,8 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 
 import type { LabelChange } from "../preview.ts";
+import { cx } from "../ui/cx.ts";
+import { popupStyles } from "../ui/styles.ts";
 
 /** Black or white text, whichever reads better on the label's color. */
 function textOn(hex: string): string {
@@ -107,7 +109,12 @@ export function DescribedLabel({
       </Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Positioner sideOffset={6}>
-          <Tooltip.Popup className="max-w-sm rounded-[3px] border border-rule bg-sheet px-3 py-2 text-sm shadow-[0_8px_24px_-12px_rgb(0_0_0/0.35)] transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0">
+          <Tooltip.Popup
+            className={cx(
+              popupStyles,
+              "max-w-sm px-3 py-2 text-sm transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0",
+            )}
+          >
             {meaning}
             {fromConfig === undefined ? null : (
               <span className="mt-1 block text-xs text-muted">

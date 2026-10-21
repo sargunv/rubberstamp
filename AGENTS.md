@@ -45,6 +45,21 @@ a secret's value.
 Planned work lives in GitHub issues on `sargunv/rubberstamp`. Rubberstamp labels
 them itself from `.config/rubberstamp.yml`, so don't label by hand.
 
+## Web UI
+
+- `apps/web/src/ui` is the design system: layout, controls, and styles with no
+  product content. `apps/web/src/components` builds Rubberstamp's features from
+  it, and routes compose those.
+- The root route renders `AppShell` with the header and footer once, for loaded
+  pages, the first load, and errors alike. Pages never render the header.
+- Every page renders `Page`. A page and its loading state render the same frame
+  component (`RepoFrame`, `AccountFrame`), so they can't lay out differently.
+  Loading shows `PendingBar` and what's already known, never guessed content.
+- Style with theme tokens (`text-drop`, `rounded-sm`, `shadow-popup`), not raw
+  values or CSS variables. A component's `className` sets layout, such as
+  margins and width; its appearance comes from its variant. Add a variant rather
+  than overriding colors or borders.
+
 ## Project invariants
 
 - Configuration lives in each repository at `.config/rubberstamp.yml` and is

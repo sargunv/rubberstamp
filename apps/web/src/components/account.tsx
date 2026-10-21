@@ -1,20 +1,20 @@
 import { Collapsible } from "@base-ui/react/collapsible";
-import {
-  GitPullRequestIcon,
-  IssueOpenedIcon,
-  LockIcon,
-  RepoIcon,
-} from "@primer/octicons-react";
+import { LockIcon } from "@primer/octicons-react";
 import type { Account } from "@sargunv/rubberstamp-core";
-import { Link } from "@tanstack/react-router";
 import { useState, type CSSProperties, type ReactNode } from "react";
 
 import { percent } from "../format.ts";
+import { cx } from "../ui/cx.ts";
+import { DisclosurePanel, DisclosureTrigger } from "../ui/disclosure.tsx";
+import { Anchor, AppLink } from "../ui/link.tsx";
+import { MetaLine, Page } from "../ui/page.tsx";
+import { PendingBar } from "../ui/progress.tsx";
+import { Notice, Section } from "../ui/section.tsx";
 import { GitHubLink } from "./github-link.tsx";
-import { Chevron, Header } from "./header.tsx";
+import { ItemKindIcon } from "./item-state.tsx";
 import { LabelDiff } from "./label.tsx";
 import { Ledger, LedgerRow } from "./ledger.tsx";
-import { PendingBar } from "./pending.tsx";
+import { RepoGrid } from "./repo-grid.tsx";
 
 type Repo = Account["repos"][number];
 
@@ -49,42 +49,51 @@ function ink(rank: number): string {
   return `color-mix(in oklch, var(--violet) ${strength}%, var(--paper))`;
 }
 
-function Shell({ owner, children }: { owner: string; children: ReactNode }) {
+/**
+ * An account's title around its content. The page and its loading state both
+ * render this, so neither can lay out differently.
+ */
+function AccountFrame({
+  owner,
+  meta,
+  children,
+}: {
+  owner: string;
+  meta?: ReactNode;
+  children?: ReactNode;
+}) {
   return (
-    <>
-      <Header owner={owner} />
-      <main className="mx-auto max-w-6xl px-5 pt-10 pb-24 sm:px-8">
-        <div className="flex items-center gap-4">
-          <h1 className="font-display text-5xl leading-none font-extrabold tracking-[0.01em] sm:text-6xl">
-            {owner}
-          </h1>
-          <GitHubLink
-            href={`https://github.com/${owner}`}
-            label={`${owner} on GitHub`}
-          />
-        </div>
-        {children}
-      </main>
-    </>
+    <Page
+      title={owner}
+      aside={
+        <GitHubLink
+          href={`https://github.com/${owner}`}
+          label={`${owner} on GitHub`}
+        />
+      }
+      meta={meta}
+    >
+      {children}
+    </Page>
   );
 }
 
 export function AccountPending({ owner }: { owner: string }) {
   return (
-    <Shell owner={owner}>
+    <AccountFrame owner={owner}>
       <PendingBar />
-    </Shell>
+    </AccountFrame>
   );
 }
 
 export function AccountNotFound({ owner }: { owner: string }) {
   return (
-    <Shell owner={owner}>
-      <p className="mt-8 max-w-xl text-muted">
+    <AccountFrame owner={owner}>
+      <Notice className="mt-8">
         Rubberstamp isn't installed on this account, or you can't see its
         installation.
-      </p>
-    </Shell>
+      </Notice>
+    </AccountFrame>
   );
 }
 
@@ -97,19 +106,27 @@ export function AccountPage({ account }: { account: Account }) {
     busy.filter((r) => r.share > 0).map((r, i) => [r.name, ink(i)]),
   );
   return (
-    <Shell owner={account.login}>
-      <p className="mt-3 font-mono text-xs text-muted">
-        {account.type === "Organization" ? "Organization" : "Personal account"}{" "}
-        · {account.repos.length}{" "}
-        {account.repos.length === 1 ? "repository" : "repositories"} ·{" "}
-        <a
-          href={account.manageUrl}
-          className="rounded-[2px] font-sans text-ink underline-offset-4 hover:underline"
-        >
-          Manage on GitHub
-        </a>
-      </p>
-
+    <AccountFrame
+      owner={account.login}
+      meta={
+        <>
+          <span>
+            {account.type === "Organization"
+              ? "Organization"
+              : "Personal account"}{" "}
+            · {account.repos.length}{" "}
+            {account.repos.length === 1 ? "repository" : "repositories"}
+          </span>
+          <Anchor
+            href={account.manageUrl}
+            variant="quiet"
+            className="font-sans"
+          >
+            Manage on GitHub
+          </Anchor>
+        </>
+      }
+    >
       <Allowance
         account={account}
         busy={busy}
@@ -118,10 +135,7 @@ export function AccountPage({ account }: { account: Account }) {
         onHover={setHovered}
       />
 
-      <section aria-labelledby="repos-heading" className="mt-14">
-        <h2 id="repos-heading" className="text-sm font-semibold">
-          Repositories
-        </h2>
+      <Section title="Repositories">
         {busy.length > 0 ? (
           <RepoTable
             repos={busy}
@@ -130,19 +144,18 @@ export function AccountPage({ account }: { account: Account }) {
             onHover={setHovered}
           />
         ) : (
-          <p className="mt-3 text-sm text-muted">
+          <Notice className="mt-3 text-sm">
             Nothing labeled or previewed this month.
-          </p>
+          </Notice>
         )}
-        {idle.length > 0 ? <IdleRepos repos={idle} /> : null}
-      </section>
+        {idle.length > 0 ? (
+          <IdleRepos owner={account.login} repos={idle} />
+        ) : null}
+      </Section>
 
-      <section aria-labelledby="activity-heading" className="mt-14">
-        <h2 id="activity-heading" className="text-sm font-semibold">
-          Recent activity
-        </h2>
+      <Section title="Recent activity">
         {account.activity.length === 0 ? (
-          <p className="mt-3 text-sm text-muted">No items labeled yet.</p>
+          <Notice className="mt-3 text-sm">No items labeled yet.</Notice>
         ) : (
           <Ledger>
             {account.activity.map((entry) => {
@@ -152,39 +165,24 @@ export function AccountPage({ account }: { account: Account }) {
                   key={`${entry.repo}#${entry.number}-${entry.createdAt}`}
                   number={entry.number}
                   url={`https://github.com/${entry.repo}/issues/${entry.number}`}
-                  icon={
-                    entry.type === "pull request" ? (
-                      <GitPullRequestIcon
-                        size={16}
-                        aria-label="Pull request"
-                        className="fill-muted"
-                      />
-                    ) : (
-                      <IssueOpenedIcon
-                        size={16}
-                        aria-label="Issue"
-                        className="fill-muted"
-                      />
-                    )
-                  }
+                  icon={<ItemKindIcon type={entry.type} />}
                   title={entry.title}
                   meta={
                     <>
-                      <Link
+                      <AppLink
                         to="/$owner/$repo/log"
                         params={{ owner, repo: name }}
-                        className="rounded-[2px] font-mono text-ink hover:underline"
+                        variant="name"
+                        className="text-ink"
                       >
                         {name}
-                      </Link>{" "}
+                      </AppLink>{" "}
                       · Labeled {when.format(new Date(entry.createdAt))}
                     </>
                   }
                   labels={
                     entry.added.length === 0 ? (
-                      <span className="text-sm text-muted">
-                        No labels added
-                      </span>
+                      <Notice className="text-sm">No labels added</Notice>
                     ) : (
                       entry.added.map((label) => (
                         <LabelDiff
@@ -201,8 +199,8 @@ export function AccountPage({ account }: { account: Account }) {
             })}
           </Ledger>
         )}
-      </section>
-    </Shell>
+      </Section>
+    </AccountFrame>
   );
 }
 
@@ -235,9 +233,9 @@ function Allowance({
       : null;
 
   return (
-    <section aria-labelledby="allowance-heading" className="mt-12">
+    <section aria-label="Allowance" className="mt-12">
       <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h2 id="allowance-heading" className="text-lg">
+        <h2 className="text-lg">
           <span className="font-display text-3xl font-extrabold tracking-[0.01em]">
             {percent(used)}
           </span>{" "}
@@ -246,14 +244,17 @@ function Allowance({
             <span className="ml-2 font-mono text-xs text-muted">raised</span>
           ) : null}
         </h2>
-        <p className="font-mono text-xs text-muted">Resets {day.format(end)}</p>
+        <MetaLine>Resets {day.format(end)}</MetaLine>
       </div>
 
       <div className="relative mt-4 pb-5">
         <div
           role="img"
           aria-label={`${percent(used)} of the monthly allowance used, ${percent(elapsed)} of the way through the month`}
-          className={`flex h-8 overflow-hidden rounded-[3px] border bg-sheet ${spent ? "border-(--drop)" : "border-rule"}`}
+          className={cx(
+            "flex h-8 overflow-hidden rounded-sm border bg-sheet",
+            spent ? "border-drop" : "border-rule",
+          )}
         >
           {busy
             .filter((r) => r.share > 0)
@@ -285,7 +286,7 @@ function Allowance({
         />
         <span
           aria-hidden
-          className="absolute bottom-0 -translate-x-1/2 font-mono text-[0.68rem] text-muted"
+          className="absolute bottom-0 -translate-x-1/2 font-mono text-xs text-muted"
           style={{ left: `${elapsed * 100}%` }}
         >
           today
@@ -294,12 +295,12 @@ function Allowance({
 
       <p className="mt-2 text-sm text-muted">
         {ceilingReached ? (
-          <span className="text-(--drop)">
+          <span className="text-drop">
             Rubberstamp's shared monthly limit is spent, so labeling is paused
             for every account until {day.format(end)}.
           </span>
         ) : spent ? (
-          <span className="text-(--drop)">
+          <span className="text-drop">
             The allowance is spent. Labeling and previews are paused until{" "}
             {day.format(end)}.
           </span>
@@ -351,20 +352,24 @@ function RepoTable({
               key={repo.name}
               onMouseEnter={() => onHover(repo.name)}
               onMouseLeave={() => onHover(null)}
-              className={`border-b border-rule ${hovered === repo.name ? "bg-sheet" : ""}`}
+              className={cx(
+                "border-b border-rule",
+                hovered === repo.name && "bg-sheet",
+              )}
             >
               <td className="px-3 py-2.5">
-                <Link
+                <AppLink
                   to="/$owner/$repo"
                   params={{ owner, repo: name }}
                   onFocus={() => onHover(repo.name)}
                   onBlur={() => onHover(null)}
-                  className="flex items-center gap-2.5 rounded-[2px] font-mono hover:text-violet"
+                  variant="name"
+                  className="flex items-center gap-2.5"
                 >
                   {/* Each repository's ink on the strip; none when it spent nothing. */}
                   <span
                     aria-hidden
-                    className="size-2.5 shrink-0 rounded-[2px]"
+                    className="size-2.5 shrink-0 rounded-xs"
                     style={swatch}
                   />
                   {name}
@@ -375,7 +380,7 @@ function RepoTable({
                       className="fill-muted"
                     />
                   ) : null}
-                </Link>
+                </AppLink>
               </td>
               <td className="px-3 py-2.5 text-right font-mono tabular-nums">
                 {repo.share > 0 ? percent(repo.share) : "—"}
@@ -397,37 +402,18 @@ function RepoTable({
 }
 
 /** Repositories with nothing this month, folded away so large accounts stay short. */
-function IdleRepos({ repos }: { repos: Repo[] }) {
+function IdleRepos({ owner, repos }: { owner: string; repos: Repo[] }) {
   return (
     <Collapsible.Root className="mt-4">
-      <Collapsible.Trigger className="group flex items-center gap-1 rounded-[3px] text-sm text-muted hover:text-ink data-panel-open:text-ink">
+      <DisclosureTrigger>
         {repos.length} {repos.length === 1 ? "repository" : "repositories"} with
         nothing this month
-        <Chevron className="transition-transform group-data-panel-open:rotate-180" />
-      </Collapsible.Trigger>
-      <Collapsible.Panel>
-        <ul className="mt-3 grid gap-x-8 border-t border-rule sm:grid-cols-2 lg:grid-cols-3">
-          {repos.map((repo) => {
-            const [owner = "", name = ""] = repo.name.split("/");
-            return (
-              <li key={repo.name} className="border-b border-rule">
-                <Link
-                  to="/$owner/$repo"
-                  params={{ owner, repo: name }}
-                  className="flex items-center gap-2 py-2 font-mono text-sm text-muted hover:text-violet"
-                >
-                  {repo.private ? (
-                    <LockIcon size={14} className="shrink-0 fill-muted" />
-                  ) : (
-                    <RepoIcon size={14} className="shrink-0 fill-muted" />
-                  )}
-                  <span className="truncate">{name}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </Collapsible.Panel>
+      </DisclosureTrigger>
+      <DisclosurePanel>
+        <div className="mt-3">
+          <RepoGrid owner={owner} repos={repos} />
+        </div>
+      </DisclosurePanel>
     </Collapsible.Root>
   );
 }

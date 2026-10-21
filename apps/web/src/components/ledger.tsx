@@ -2,7 +2,8 @@ import { Collapsible } from "@base-ui/react/collapsible";
 import type { ReactNode } from "react";
 
 import { requirement, type Group } from "../preview.ts";
-import { Chevron } from "./header.tsx";
+import { DisclosurePanel, DisclosureTrigger } from "../ui/disclosure.tsx";
+import { Anchor } from "../ui/link.tsx";
 import { DescribedLabel } from "./label.tsx";
 
 export const date = new Intl.DateTimeFormat("en", {
@@ -69,9 +70,9 @@ export function LedgerRow({
       className="grid grid-cols-[var(--mcol)_1fr] border-b border-rule lg:grid-cols-[var(--mcol)_1fr_22rem_5.5rem]"
     >
       <div className="py-4 pr-2.5 text-right font-mono text-sm text-muted lg:pr-3">
-        <a href={url} className="rounded-[2px] hover:text-ink hover:underline">
+        <Anchor href={url} variant="quiet">
           #{number}
-        </a>
+        </Anchor>
         {margin}
       </div>
 
@@ -81,12 +82,13 @@ export function LedgerRow({
           {icon}
         </span>
         <div className="min-w-0">
-          <a
+          <Anchor
             href={url}
-            className="rounded-[2px] leading-snug font-medium text-pretty hover:underline"
+            variant="plain"
+            className="leading-snug font-medium text-pretty"
           >
             {title}
-          </a>
+          </Anchor>
           <p className="mt-1 text-xs text-muted">{meta}</p>
         </div>
       </div>
@@ -98,13 +100,12 @@ export function LedgerRow({
       {groups && decisions ? (
         <>
           <div className="col-start-2 pb-4 pl-5 lg:col-start-auto lg:flex lg:items-start lg:justify-end lg:py-4 lg:pl-0">
-            <Collapsible.Trigger className="group -ml-1.5 flex items-center gap-1 rounded-[3px] px-1.5 py-0.5 text-sm text-muted hover:text-ink data-panel-open:text-ink lg:-mr-1.5 lg:ml-0">
+            <DisclosureTrigger className="-ml-1.5 px-1.5 py-0.5 lg:-mr-1.5 lg:ml-0">
               Scores
-              <Chevron className="transition-transform group-data-panel-open:rotate-180" />
-            </Collapsible.Trigger>
+            </DisclosureTrigger>
           </div>
 
-          <Collapsible.Panel className="col-span-full col-start-2 h-(--collapsible-panel-height) overflow-hidden transition-[height] duration-200 ease-out data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none">
+          <DisclosurePanel className="col-span-full col-start-2">
             <div className="grid gap-x-10 gap-y-6 pt-1 pb-6 pl-5 sm:grid-cols-2 lg:grid-cols-3">
               {groups.map((g) => (
                 <GroupScores
@@ -115,7 +116,7 @@ export function LedgerRow({
                 />
               ))}
             </div>
-          </Collapsible.Panel>
+          </DisclosurePanel>
         </>
       ) : null}
     </Collapsible.Root>

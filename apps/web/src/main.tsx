@@ -9,9 +9,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
 import { ApiError } from "./api.ts";
-import { PendingBar } from "./components/pending.tsx";
 import { meQuery } from "./queries.ts";
 import { routeTree } from "./routeTree.gen.ts";
+import { PendingBar } from "./ui/progress.tsx";
 
 import "./styles.css";
 

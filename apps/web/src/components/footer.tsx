@@ -1,21 +1,18 @@
-import { Link } from "@tanstack/react-router";
+import { Container } from "../ui/app-shell.tsx";
+import { Anchor, AppLink } from "../ui/link.tsx";
 
 /** The site's quiet footer: where the policy and the source live. */
-export function Footer() {
+export function SiteFooter() {
   return (
-    <footer className="mx-auto flex w-full max-w-6xl gap-5 px-5 py-6 text-xs text-muted sm:px-8">
-      <Link
-        to="/privacy"
-        className="rounded-[2px] underline-offset-4 hover:text-ink hover:underline"
-      >
-        Privacy
-      </Link>
-      <a
-        href="https://github.com/sargunv/rubberstamp"
-        className="rounded-[2px] underline-offset-4 hover:text-ink hover:underline"
-      >
-        Source
-      </a>
+    <footer>
+      <Container className="flex gap-5 py-6 text-xs">
+        <AppLink to="/privacy" variant="quiet">
+          Privacy
+        </AppLink>
+        <Anchor href="https://github.com/sargunv/rubberstamp" variant="quiet">
+          Source
+        </Anchor>
+      </Container>
     </footer>
   );
 }

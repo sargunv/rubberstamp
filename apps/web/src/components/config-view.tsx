@@ -4,6 +4,8 @@ import { useState } from "react";
 
 import type { Group } from "../preview.ts";
 import { requirement } from "../preview.ts";
+import { Button } from "../ui/button.tsx";
+import { Anchor } from "../ui/link.tsx";
 import { DescribedLabel } from "./label.tsx";
 
 /** The config's context, two lines until expanded. */
@@ -14,14 +16,14 @@ function Context({ text }: { text: string }) {
       <dt className="font-mono text-sm font-medium">context</dt>
       <dd className="max-w-3xl text-sm text-muted">
         <p className={expanded ? "" : "line-clamp-2"}>{text}</p>
-        <button
-          type="button"
+        <Button
+          variant="quiet"
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
-          className="mt-1 rounded-[2px] text-xs text-ink underline-offset-4 hover:underline"
+          className="mt-1 text-xs"
         >
           {expanded ? "Show less" : "Show all"}
-        </button>
+        </Button>
       </dd>
     </div>
   );
@@ -54,12 +56,13 @@ export function ConfigView({
         className="border-b border-rule pb-2 text-sm font-semibold"
       >
         Config{" "}
-        <a
+        <Anchor
           href={`https://github.com/${repo}/blob/HEAD/${path}`}
-          className="ml-1 rounded-[2px] font-mono text-xs font-normal text-muted hover:text-ink hover:underline"
+          variant="quiet"
+          className="ml-1 font-mono text-xs font-normal"
         >
           {path}
-        </a>
+        </Anchor>
       </h2>
 
       <Tooltip.Provider delay={150}>

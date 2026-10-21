@@ -1,6 +1,7 @@
-import { GitPullRequestIcon, IssueOpenedIcon } from "@primer/octicons-react";
 import type { LogEntry } from "@sargunv/rubberstamp-core";
 
+import { Notice } from "../ui/section.tsx";
+import { ItemKindIcon } from "./item-state.tsx";
 import { LabelDiff } from "./label.tsx";
 import { Ledger, LedgerRow } from "./ledger.tsx";
 
@@ -22,7 +23,7 @@ export function LogTab({
   colors: Map<string, string>;
 }) {
   if (entries.length === 0) {
-    return <p className="text-muted">No items labeled yet.</p>;
+    return <Notice>No items labeled yet.</Notice>;
   }
   return (
     <Ledger>
@@ -31,26 +32,12 @@ export function LogTab({
           key={`${entry.number}-${entry.createdAt}`}
           number={entry.number}
           url={`https://github.com/${repo}/issues/${entry.number}`}
-          icon={
-            entry.type === "pull request" ? (
-              <GitPullRequestIcon
-                size={16}
-                aria-label="Pull request"
-                className="fill-muted"
-              />
-            ) : (
-              <IssueOpenedIcon
-                size={16}
-                aria-label="Issue"
-                className="fill-muted"
-              />
-            )
-          }
+          icon={<ItemKindIcon type={entry.type} />}
           title={entry.title}
           meta={`Labeled ${when.format(new Date(entry.createdAt))} with ${entry.model}`}
           labels={
             entry.added.length === 0 ? (
-              <span className="text-sm text-muted">No labels added</span>
+              <Notice className="text-sm">No labels added</Notice>
             ) : (
               entry.added.map((name) => (
                 <LabelDiff

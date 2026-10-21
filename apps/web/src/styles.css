@@ -39,6 +39,15 @@
   --color-muted: var(--muted);
   --color-violet: var(--violet);
   --color-on-violet: var(--on-violet);
+  --color-add: var(--add);
+  --color-drop: var(--drop);
+  --color-gh-open: var(--gh-open);
+  --color-gh-done: var(--gh-done);
+  --color-gh-closed: var(--gh-closed);
+  /* Corners stay crisp, like stamped paper: two radii, and pills for labels. */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --shadow-popup: 0 8px 24px -12px rgb(0 0 0 / 0.35);
   --font-display:
     "Sofia Sans Extra Condensed Variable",
     "Arial Narrow",

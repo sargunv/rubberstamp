@@ -1,98 +1,110 @@
 import { Combobox } from "@base-ui/react/combobox";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 
 import { meQuery, reposQuery, useSignOut } from "../queries.ts";
+import { Container } from "../ui/app-shell.tsx";
+import { Button } from "../ui/button.tsx";
+import { cx } from "../ui/cx.ts";
+import { Chevron } from "../ui/icons.tsx";
+import { Anchor, AppLink } from "../ui/link.tsx";
+import { popupItemStyles, popupStyles } from "../ui/styles.ts";
 
-export function Wordmark({ className = "" }: { className?: string }) {
+export function Wordmark({ className }: { className?: string }) {
   return (
     <span
-      className={`inline-block rounded-[3px] border-2 border-violet px-1.5 pt-0.5 font-display text-lg leading-none font-extrabold tracking-[0.08em] text-violet uppercase outline-1 outline-offset-2 outline-violet ${className}`}
+      className={cx(
+        "inline-block rounded-sm border-2 border-violet px-1.5 pt-0.5 font-display text-lg leading-none font-extrabold tracking-[0.08em] text-violet uppercase outline-1 outline-offset-2 outline-violet",
+        className,
+      )}
     >
       Rubberstamp
     </span>
   );
 }
 
-/** The site header, showing the account and repository a page is about. */
-export function Header({
+/**
+ * The site header, rendered once around every page. It reads the account and
+ * repository from the URL, so pages never render or position it themselves.
+ */
+export function SiteHeader({ bare = false }: { bare?: boolean }) {
+  const { owner, repo } = useParams({ strict: false });
+  return (
+    <header className="border-b border-rule">
+      <Container className="flex items-center gap-5 py-3">
+        <AppLink to="/" variant="plain" aria-label="Rubberstamp home">
+          <Wordmark />
+        </AppLink>
+        {owner && !bare ? <Breadcrumb owner={owner} repo={repo} /> : null}
+        {bare ? null : <Account />}
+      </Container>
+    </header>
+  );
+}
+
+function Breadcrumb({
   owner,
   repo,
-  bare = false,
 }: {
-  owner?: string;
-  repo?: string;
-  /** Only the wordmark, for before anything is known about the visitor. */
-  bare?: boolean;
+  owner: string;
+  repo: string | undefined;
 }) {
-  const account = repo?.split("/")[0] ?? owner;
+  return (
+    <nav
+      aria-label="Breadcrumb"
+      className="flex min-w-0 items-center font-mono text-sm"
+    >
+      {repo ? (
+        <>
+          <AppLink
+            to="/$owner"
+            params={{ owner }}
+            variant="quiet"
+            className="px-1 py-1"
+          >
+            {owner}
+          </AppLink>
+          <span aria-hidden className="text-muted">
+            /
+          </span>
+          <RepoSwitcher repo={`${owner}/${repo}`} />
+        </>
+      ) : (
+        <span aria-current="page" className="px-1 py-1">
+          {owner}
+        </span>
+      )}
+    </nav>
+  );
+}
+
+function Account() {
   const me = useQuery(meQuery).data;
   const signOut = useSignOut();
   return (
-    <header className="border-b border-rule">
-      <div className="mx-auto flex max-w-6xl items-center gap-5 px-5 py-3 sm:px-8">
-        <Link to="/" aria-label="Rubberstamp home" className="rounded-[3px]">
-          <Wordmark />
-        </Link>
-        {account ? (
-          <nav
-            aria-label="Breadcrumb"
-            className="flex min-w-0 items-center font-mono text-sm"
+    <div className="ml-auto flex items-center gap-3 text-sm">
+      {me ? (
+        <>
+          <img
+            src={me.avatarUrl}
+            alt={me.login}
+            title={me.login}
+            className="size-7 rounded-full border border-rule"
+          />
+          <Button
+            variant="subtle"
+            disabled={signOut.isPending}
+            onClick={() => signOut.mutate()}
           >
-            {repo ? (
-              <Link
-                to="/$owner"
-                params={{ owner: account }}
-                className="rounded-[3px] px-1 py-1 text-muted hover:text-ink hover:underline"
-              >
-                {account}
-              </Link>
-            ) : (
-              <span aria-current="page" className="px-1 py-1">
-                {account}
-              </span>
-            )}
-            {repo ? (
-              <>
-                <span aria-hidden className="text-muted">
-                  /
-                </span>
-                <RepoSwitcher repo={repo} />
-              </>
-            ) : null}
-          </nav>
-        ) : null}
-        {bare ? null : (
-          <div className="ml-auto flex items-center gap-3">
-            {me ? (
-              <img
-                src={me.avatarUrl}
-                alt={me.login}
-                title={me.login}
-                className="size-7 rounded-full border border-rule"
-              />
-            ) : null}
-            {me ? (
-              <button
-                type="button"
-                disabled={signOut.isPending}
-                onClick={() => signOut.mutate()}
-                className="rounded-[3px] text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
-              >
-                Sign out
-              </button>
-            ) : (
-              <a
-                href="/auth/github"
-                className="rounded-[3px] text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
-              >
-                Sign in
-              </a>
-            )}
-          </div>
-        )}
-      </div>
-    </header>
+            Sign out
+          </Button>
+        </>
+      ) : (
+        <Anchor href="/auth/github" variant="quiet">
+          Sign in
+        </Anchor>
+      )}
+    </div>
   );
 }
 
@@ -113,7 +125,7 @@ function RepoSwitcher({ repo }: { repo: string }) {
     >
       <Combobox.Trigger
         aria-label="Switch repository"
-        className="flex min-w-0 items-center gap-1.5 rounded-[3px] px-1.5 py-1 text-ink hover:bg-sheet data-popup-open:bg-sheet"
+        className="flex min-w-0 items-center gap-1.5 rounded-sm px-1.5 py-1 text-ink hover:bg-sheet data-popup-open:bg-sheet"
       >
         <span className="truncate">{repo.split("/")[1]}</span>
         <Chevron />
@@ -122,7 +134,10 @@ function RepoSwitcher({ repo }: { repo: string }) {
         <Combobox.Positioner sideOffset={6} align="start">
           <Combobox.Popup
             aria-label="Switch repository"
-            className="w-80 max-w-(--available-width) overflow-hidden rounded-[3px] border border-rule bg-sheet shadow-[0_8px_24px_-12px_rgb(0_0_0/0.35)]"
+            className={cx(
+              "w-80 max-w-(--available-width) overflow-hidden",
+              popupStyles,
+            )}
           >
             <Combobox.Input
               placeholder="Find a repository"
@@ -138,7 +153,7 @@ function RepoSwitcher({ repo }: { repo: string }) {
                   <Combobox.Item
                     key={name}
                     value={name}
-                    className="flex cursor-default items-center justify-between gap-4 rounded-[2px] px-2.5 py-1.5 font-mono text-sm outline-none data-highlighted:bg-violet data-highlighted:text-on-violet"
+                    className={cx(popupItemStyles, "font-mono text-sm")}
                   >
                     <span className="truncate">
                       <span className="opacity-60">{owner}/</span>
@@ -155,22 +170,5 @@ function RepoSwitcher({ repo }: { repo: string }) {
         </Combobox.Positioner>
       </Combobox.Portal>
     </Combobox.Root>
-  );
-}
-
-export function Chevron({ className = "" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 12 12"
-      aria-hidden
-      className={`size-3 shrink-0 ${className}`}
-    >
-      <path
-        d="M3 4.5 6 7.5 9 4.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-    </svg>
   );
 }
