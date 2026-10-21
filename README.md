@@ -35,6 +35,7 @@ Name the coverage your workflows run as units in the config:
 
 ```yaml
 ci:
+  workflow: .github/workflows/ci.yml
   units:
     linux: { covers: Builds and tests everything on Linux. }
     macos:
@@ -46,6 +47,12 @@ A unit runs when Jev thinks the change needs it or a changed file matches its
 `paths`. A plan job asks Rubberstamp for the plan, and later jobs gate on unit
 ids. Pull requests get a plan; every other event runs everything, as does any
 error or timeout.
+
+`workflow` names the workflow file whose jobs gate on units. When a run of it
+succeeds, the units it ran passed, and later pushes judge each unit only on what
+changed since it last passed. Only that workflow's successes count as units
+passing, so another workflow can't stand in for it; without `workflow`, every
+push is judged on the whole pull request.
 
 ```yaml
 jobs:

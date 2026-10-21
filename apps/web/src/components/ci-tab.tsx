@@ -16,6 +16,7 @@ export function CiTab({
     return (
       <Unconfigured
         example={`ci:
+  workflow: .github/workflows/ci.yml
   units:
     linux:
       covers: Builds and runs every test suite on Linux.
@@ -31,7 +32,7 @@ export function CiTab({
   return (
     <>
       <SharedContext repo={repo} path={path} context={config.context} />
-      <CiUnits config={config} />
+      <CiUnits repo={repo} config={config} />
     </>
   );
 }

@@ -19,6 +19,7 @@ import { CONFIG as LABELS_ONLY, FakeRepo, FakeStore } from "./testing.ts";
 
 const CONFIG = `
 ci:
+  workflow: .github/workflows/ci.yml
   units:
     linux: { covers: Linux. }
     macos: { covers: macOS. }
@@ -263,6 +264,7 @@ describe("ciPlan", () => {
         id: 9001,
         event: "pull_request",
         head_sha: HEAD,
+        path: ".github/workflows/ci.yml",
         created_at: "2026-10-21T11:00:00Z",
         repository: { id: repo.repoId },
         ...overrides,
@@ -344,6 +346,15 @@ describe("ciPlan", () => {
       expect(store.ciRuns.size).toBe(0);
     });
 
+    it("but not without the workflow that gates jobs on units", async () => {
+      const source = CONFIG.replace(/^ {2}workflow: .*\n/m, "");
+      const { deps, repo, save, store } = setup({ source });
+      ranOn(repo);
+      await save(HEAD, judged, source);
+      expect((await ciPlan(query(run), null, deps)).code).toBe(200);
+      expect(store.ciRuns.size).toBe(0);
+    });
+
     it("but not for an action too old to name its run", async () => {
       const { deps, repo, save, store } = setup();
       ranOn(repo);
@@ -356,6 +367,7 @@ describe("ciPlan", () => {
       ["at another head", { head_sha: OLD }],
       ["for another event", { event: "pull_request_target" }],
       ["in another repository", { repository: { id: 99 } }],
+      ["of another workflow", { path: ".github/workflows/lint.yml" }],
       ["started over a day ago", { created_at: "2026-10-20T11:59:59Z" }],
     ])("but not for a run %s", async (_, overrides) => {
       const { deps, repo, save, store } = setup();

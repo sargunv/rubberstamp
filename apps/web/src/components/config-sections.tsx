@@ -32,17 +32,21 @@ function Context({ text }: { text: string }) {
 function ConfigSection({
   title,
   context,
+  intro,
   warnings = [],
   children,
 }: {
   title: string;
   context: string | undefined;
+  /** Settings for the whole section, shown before its entries. */
+  intro?: ReactNode;
   warnings?: string[];
   children: ReactNode;
 }) {
   return (
     <Section title={title} className="mt-10">
       {context ? <Context text={context} /> : null}
+      {intro}
       <dl className="mt-4 border-t border-rule">{children}</dl>
       {warnings.length > 0 ? (
         <ul className="mt-6 space-y-1 text-sm">
@@ -171,10 +175,48 @@ export function LabelGroups({
   );
 }
 
-/** The CI units, with what Jev reads about each. */
-export function CiUnits({ config }: { config: Config }) {
+/** The workflow whose successes count as its units passing, if any. */
+function CiWorkflow({
+  repo,
+  workflow,
+}: {
+  repo: string;
+  workflow: string | undefined;
+}) {
   return (
-    <ConfigSection title="CI units" context={config.ci?.context}>
+    <p className="mt-4 max-w-3xl text-sm text-muted">
+      {workflow === undefined ? (
+        <>
+          No <code className="font-mono text-ink">workflow</code> names the one
+          that gates jobs on these units, so Rubberstamp records no passes and
+          judges every push on the whole pull request.
+        </>
+      ) : (
+        <>
+          Units pass when{" "}
+          <Anchor
+            href={`https://github.com/${repo}/blob/HEAD/${workflow}`}
+            variant="quiet"
+            className="font-mono"
+          >
+            {workflow}
+          </Anchor>{" "}
+          succeeds, and each push is judged on what changed since a unit last
+          passed.
+        </>
+      )}
+    </p>
+  );
+}
+
+/** The CI units, with what Jev reads about each. */
+export function CiUnits({ repo, config }: { repo: string; config: Config }) {
+  return (
+    <ConfigSection
+      title="CI units"
+      context={config.ci?.context}
+      intro={<CiWorkflow repo={repo} workflow={config.ci?.workflow} />}
+    >
       {ciUnits(config).map((unit) => (
         <Entry
           key={unit.id}

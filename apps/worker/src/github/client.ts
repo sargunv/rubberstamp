@@ -101,6 +101,8 @@ const WorkflowRun = v.object({
   id: v.number(),
   event: v.string(),
   head_sha: v.string(),
+  /** The workflow file the run ran, such as `.github/workflows/ci.yml`. */
+  path: v.string(),
   created_at: v.string(),
   repository: v.object({ id: v.number() }),
 });

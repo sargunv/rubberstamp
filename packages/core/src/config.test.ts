@@ -214,6 +214,26 @@ describe("ci config", () => {
     ]);
   });
 
+  it("takes the workflow that gates jobs on units", () => {
+    const units = "  units:\n    docs: { covers: Docs }\n";
+    const result = parseConfig(
+      `ci:\n  workflow: .github/workflows/ci.yml\n${units}`,
+    );
+    expect(result.ok && result.config.ci?.workflow).toBe(
+      ".github/workflows/ci.yml",
+    );
+    for (const path of [
+      "ci.yml",
+      ".github/workflows/ci.json",
+      ".github/workflows/sub/ci.yml",
+      ".github/actions/ci.yaml",
+    ]) {
+      expect(errors(`ci:\n  workflow: ${path}\n${units}`)).toEqual([
+        "ci.workflow: name a workflow file such as .github/workflows/ci.yml",
+      ]);
+    }
+  });
+
   it("rejects a unit without coverage or with unknown keys", () => {
     const found = errors(
       "ci:\n  units:\n    docs: { paths: [docs/*], jobs: [docs] }\n",

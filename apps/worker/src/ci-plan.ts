@@ -85,14 +85,16 @@ const MAX_RUN_AGE_MS = 24 * 60 * 60_000;
 
 /**
  * Whether the run a caller names really is a pull_request run of this
- * repository at the head it asked about, started recently. The endpoint is
- * public, so a caller could otherwise tie another workflow's success, or one
- * that ran the base branch's code, to this pull request's units.
+ * repository's configured workflow at the head it asked about, started
+ * recently. The endpoint is public, so a caller could otherwise tie another
+ * workflow's success, or one that ran the base branch's code, to this pull
+ * request's units.
  */
 async function runAsked(
   repo: RepoApi,
   repoId: number,
   runId: number,
+  workflow: string,
   query: PlanQuery,
   now: Date,
 ): Promise<boolean> {
@@ -102,6 +104,7 @@ async function runAsked(
       run !== null &&
       run.repository.id === repoId &&
       run.event === "pull_request" &&
+      run.path === workflow &&
       run.head_sha.toLowerCase() === query.sha &&
       now.getTime() - Date.parse(run.created_at) <= MAX_RUN_AGE_MS
     );
@@ -165,12 +168,22 @@ export async function ciPlan(
 
   // The units the asking run will execute, so its outcome can say they passed
   // at this head. Only answers it acts on are recorded, never pending ones.
+  // Without the workflow that gates jobs on units, any other pull_request
+  // workflow's success could stand in for it, so nothing is recorded.
+  const workflow = parsed.config.ci?.workflow;
   const record = async (units: string[], base: string) => {
     if (query.run_id === undefined || query.run_attempt === undefined) return;
+    if (workflow === undefined) return;
     const now = deps.now?.() ?? new Date();
-    if (!(await runAsked(repo, repository.id, query.run_id, query, now))) {
-      return;
-    }
+    const asked = await runAsked(
+      repo,
+      repository.id,
+      query.run_id,
+      workflow,
+      query,
+      now,
+    );
+    if (!asked) return;
     await deps.store.saveRun({
       installationId: installation.id,
       repoId: repository.id,
