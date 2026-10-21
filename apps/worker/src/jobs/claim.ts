@@ -10,11 +10,12 @@ export async function claimed<T>(
   claim: Claim,
   spend: () => Promise<T>,
 ): Promise<T | null> {
-  if (!(await store.claim(claim))) return null;
+  const owner = crypto.randomUUID();
+  if (!(await store.claim(claim, owner))) return null;
   try {
     return await spend();
   } catch (error) {
-    await store.release(claim);
+    await store.release(claim, owner);
     throw error;
   }
 }

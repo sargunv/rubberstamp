@@ -108,15 +108,17 @@ export class FakeStore implements Store {
     this.runs.push(run);
   };
   saveInstallation = async () => {};
-  claims = new Set<string>();
-  claim = async (claim: Claim) => {
+  /** Each held claim's owner, by claim. */
+  claims = new Map<string, string>();
+  claim = async (claim: Claim, owner: string) => {
     const key = JSON.stringify(claim);
     if (this.claims.has(key)) return false;
-    this.claims.add(key);
+    this.claims.set(key, owner);
     return true;
   };
-  release = async (claim: Claim) => {
-    this.claims.delete(JSON.stringify(claim));
+  release = async (claim: Claim, owner: string) => {
+    const key = JSON.stringify(claim);
+    if (this.claims.get(key) === owner) this.claims.delete(key);
   };
   plans: CiPlan[] = [];
   hasPlan = async (_: number, __: number, head: string, baseRef: string) =>

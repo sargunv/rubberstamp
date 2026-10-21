@@ -7,6 +7,9 @@ CREATE TABLE claims (
   number INTEGER NOT NULL,
   -- What else identifies the work, such as a plan's head and base.
   key TEXT NOT NULL DEFAULT '',
+  -- The execution holding the claim, so one whose lease lapsed can't release
+  -- the claim another execution has since taken.
+  owner TEXT NOT NULL,
   claimed_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (kind, repo_id, number, key)
 );

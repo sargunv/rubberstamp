@@ -167,12 +167,10 @@ describe("runPlanJob", () => {
 
   it("leaves a head to the job that claimed it first", async () => {
     const store = new FakeStore();
-    await store.claim({
-      kind: "plan",
-      repoId: 2,
-      number: 3,
-      key: "abc123 main",
-    });
+    await store.claim(
+      { kind: "plan", repoId: 2, number: 3, key: "abc123 main" },
+      "another job",
+    );
     const requests: Request[] = [];
     expect(
       await runPlanJob(

@@ -75,7 +75,7 @@ describe("runLabelJob", () => {
     const claim = { kind: "label", repoId: 2, number: 3, key: "" } as const;
 
     const busy = new FakeStore();
-    await busy.claim(claim);
+    await busy.claim(claim, "another job");
     const requests: Request[] = [];
     expect(await runLabelJob(job, options(busy, jev(requests)))).toMatchObject({
       status: "busy",

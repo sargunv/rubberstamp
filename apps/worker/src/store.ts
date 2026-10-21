@@ -154,9 +154,10 @@ export interface Store {
     tokens: number,
   ): Promise<void>;
   saveLabelRun(run: LabelRun): Promise<void>;
-  /** Whether this job now holds the claim; false if another job does. */
-  claim(claim: Claim): Promise<boolean>;
-  release(claim: Claim): Promise<void>;
+  /** Whether `owner` now holds the claim; false if another job does. */
+  claim(claim: Claim, owner: string): Promise<boolean>;
+  /** Release the claim if `owner` still holds it. */
+  release(claim: Claim, owner: string): Promise<void>;
   hasPlan(
     repoId: number,
     number: number,
@@ -288,12 +289,12 @@ export class CloudflareStore implements Store {
       .run();
   }
 
-  async claim(claim: Claim) {
+  async claim(claim: Claim, owner: string) {
     const result = await this.db
       .prepare(
-        `INSERT INTO claims (kind, repo_id, number, key) VALUES (?, ?, ?, ?)
+        `INSERT INTO claims (kind, repo_id, number, key, owner) VALUES (?, ?, ?, ?, ?)
          ON CONFLICT (kind, repo_id, number, key) DO UPDATE
-         SET claimed_at = datetime('now')
+         SET owner = excluded.owner, claimed_at = datetime('now')
          WHERE claimed_at < datetime('now', ?)`,
       )
       .bind(
@@ -301,18 +302,20 @@ export class CloudflareStore implements Store {
         claim.repoId,
         claim.number,
         claim.key,
+        owner,
         `-${CLAIM_MINUTES} minutes`,
       )
       .run();
     return result.meta.changes > 0;
   }
 
-  async release(claim: Claim) {
+  async release(claim: Claim, owner: string) {
     await this.db
       .prepare(
-        "DELETE FROM claims WHERE kind = ? AND repo_id = ? AND number = ? AND key = ?",
+        `DELETE FROM claims
+         WHERE kind = ? AND repo_id = ? AND number = ? AND key = ? AND owner = ?`,
       )
-      .bind(claim.kind, claim.repoId, claim.number, claim.key)
+      .bind(claim.kind, claim.repoId, claim.number, claim.key, owner)
       .run();
   }
 
