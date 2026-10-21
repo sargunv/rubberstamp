@@ -1,0 +1,45 @@
+name: Rubberstamp CI plan
+description: >-
+  Ask Rubberstamp which CI units a pull request needs, so later jobs can skip
+  the rest. Anything unexpected runs every unit instead of failing.
+author: sargunv
+
+inputs:
+  token:
+    description: >-
+      A token that can read the repository, such as github.token. Only private
+      repositories need one.
+    required: false
+    default: ""
+  timeout:
+    description: Seconds to wait for the plan before running every unit.
+    required: false
+    default: "600"
+  url:
+    description: Where Rubberstamp runs.
+    required: false
+    default: https://rubberstamp.sargunv.dev
+
+outputs:
+  units:
+    description: A JSON array of the ids of the units that run.
+    value: ${{ steps.plan.outputs.units }}
+  all:
+    description: '"true" when every unit runs, otherwise "false".'
+    value: ${{ steps.plan.outputs.all }}
+
+runs:
+  using: composite
+  steps:
+    - id: plan
+      shell: bash
+      env:
+        RUBBERSTAMP_TOKEN: ${{ inputs.token }}
+        RUBBERSTAMP_TIMEOUT: ${{ inputs.timeout }}
+        RUBBERSTAMP_URL: ${{ inputs.url }}
+      # The script falls back on its own; this catches it dying outright.
+      run: |
+        bash "$GITHUB_ACTION_PATH/plan.sh" || {
+          echo "::warning title=Rubberstamp::The plan step failed; running every unit"
+          printf 'all=true\nunits=[]\n' >> "$GITHUB_OUTPUT"
+        }
