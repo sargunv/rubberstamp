@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import * as v from "valibot";
 
 import { parseAllowlist } from "./allowlist.ts";
+import { Budgets, budgetFor } from "./budget.ts";
 import { verifyWebhook } from "./github/auth.ts";
 import { GitHubApp } from "./github/client.ts";
 import { runLabelJob } from "./jobs/label.ts";
@@ -52,6 +53,7 @@ export default {
   async queue(batch, env) {
     const github = new GitHubApp(env.GITHUB_CLIENT_ID, env.GITHUB_PRIVATE_KEY);
     const store = new CloudflareStore(env.DB, env.STATES);
+    const budgets = v.parse(Budgets, env.BUDGETS);
     const jev = (request: Request) =>
       ask(request, { apiKey: env.TYPESAFE_API_KEY });
     for (const message of batch.messages) {
@@ -67,7 +69,7 @@ export default {
           store,
           ask: jev,
           model: env.JEV_MODEL,
-          dailyTokens: Number(env.DAILY_TOKENS),
+          budget: budgetFor(budgets, job.output.repo.split("/")[0] ?? ""),
         });
         console.log(`${job.output.repo}#${job.output.number}`, outcome);
         message.ack();

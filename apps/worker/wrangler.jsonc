@@ -9,8 +9,10 @@
   "vars": {
     "GITHUB_CLIENT_ID": "Iv23li79Tp7Nqf6OsCCb",
     "JEV_MODEL": "jev-latest",
-    "DAILY_TOKENS": "5000000",
-    "PRIVATE_ALLOWLIST": "sargunv/*,maplibre/*,stringline-app/*"
+    "PRIVATE_ALLOWLIST": "sargunv/*,maplibre/*,stringline-app/*",
+    // Jev input tokens per UTC month. Jev costs $0.042 per million input
+    // tokens, so 24M is about $1. Accounts override the per-installation budget.
+    "BUDGETS": { "installation": 24000000, "global": 240000000, "accounts": {} }
   },
   "d1_databases": [
     {

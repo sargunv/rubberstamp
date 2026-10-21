@@ -12,6 +12,7 @@ import {
   type Response,
 } from "@sargunv/rubberstamp-core";
 
+import { budgetPeriod, type Budget } from "../budget.ts";
 import type { RepoApi } from "../github/client.ts";
 import type { CachedAnswer, Store } from "../store.ts";
 
@@ -28,7 +29,7 @@ export type LabelDeps = {
   store: Store;
   ask: (request: Request) => Promise<Response>;
   model: string;
-  dailyTokens: number;
+  budget: Budget;
   now?: () => Date;
 };
 
@@ -67,9 +68,14 @@ export async function runLabelJob(
     return { status: "skipped", reason: "no label groups", warnings };
   }
 
-  const day = (deps.now?.() ?? new Date()).toISOString().slice(0, 10);
-  if ((await store.usage(job.installationId, day)) >= deps.dailyTokens) {
-    return { status: "skipped", reason: "daily budget spent", warnings };
+  const period = budgetPeriod(deps.now?.() ?? new Date());
+  if (
+    (await store.usage(job.installationId, period)) >= deps.budget.installation
+  ) {
+    return { status: "skipped", reason: "monthly budget spent", warnings };
+  }
+  if ((await store.globalUsage(period)) >= deps.budget.global) {
+    return { status: "skipped", reason: "global budget spent", warnings };
   }
 
   const issue = await repo.issue(job.number);
@@ -84,7 +90,7 @@ export async function runLabelJob(
         };
   const request = labelRequest(config, groups, item, deps.model);
   const response = await deps.ask(request);
-  await store.addUsage(job.installationId, day, response.usage.input_tokens);
+  await store.addUsage(job.installationId, period, response.usage.input_tokens);
 
   const scores = labelScores(groups, response.answers);
   // Read the labels again in case someone labeled the item while Jev judged it.

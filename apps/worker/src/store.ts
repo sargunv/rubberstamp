@@ -30,8 +30,13 @@ export type LabelEvent = {
 
 export interface Store {
   hasLabelRun(repoId: number, number: number): Promise<boolean>;
-  usage(installationId: number, day: string): Promise<number>;
-  addUsage(installationId: number, day: string, tokens: number): Promise<void>;
+  usage(installationId: number, period: string): Promise<number>;
+  globalUsage(period: string): Promise<number>;
+  addUsage(
+    installationId: number,
+    period: string,
+    tokens: number,
+  ): Promise<void>;
   saveState(key: string, state: Json): Promise<void>;
   saveLabelRun(run: LabelRun, answers: CachedAnswer[]): Promise<void>;
   recordLabelEvent(event: LabelEvent): Promise<void>;
@@ -58,24 +63,32 @@ export class CloudflareStore implements Store {
     return row !== null;
   }
 
-  async usage(installationId: number, day: string): Promise<number> {
+  async usage(installationId: number, period: string): Promise<number> {
     const tokens = await this.db
       .prepare(
-        "SELECT input_tokens FROM usage WHERE installation_id = ? AND day = ?",
+        "SELECT input_tokens FROM usage WHERE installation_id = ? AND period = ?",
       )
-      .bind(installationId, day)
+      .bind(installationId, period)
       .first<number>("input_tokens");
     return tokens ?? 0;
   }
 
-  async addUsage(installationId: number, day: string, tokens: number) {
+  async globalUsage(period: string): Promise<number> {
+    const tokens = await this.db
+      .prepare("SELECT SUM(input_tokens) AS tokens FROM usage WHERE period = ?")
+      .bind(period)
+      .first<number | null>("tokens");
+    return tokens ?? 0;
+  }
+
+  async addUsage(installationId: number, period: string, tokens: number) {
     await this.db
       .prepare(
-        `INSERT INTO usage (installation_id, day, input_tokens) VALUES (?, ?, ?)
-         ON CONFLICT (installation_id, day)
+        `INSERT INTO usage (installation_id, period, input_tokens) VALUES (?, ?, ?)
+         ON CONFLICT (installation_id, period)
          DO UPDATE SET input_tokens = input_tokens + excluded.input_tokens`,
       )
-      .bind(installationId, day, tokens)
+      .bind(installationId, period, tokens)
       .run();
   }
 

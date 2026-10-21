@@ -58,6 +58,8 @@ class FakeStore implements Store {
   spent = 0;
   hasLabelRun = async () => this.runs.length > 0;
   usage = async () => this.spent;
+  globalSpent = 0;
+  globalUsage = async () => this.globalSpent;
   addUsage = async (_: number, __: string, tokens: number) => {
     this.spent += tokens;
   };
@@ -116,7 +118,7 @@ describe("runLabelJob", () => {
       store,
       ask: jev(requests),
       model: "jev-latest",
-      dailyTokens: 10_000,
+      budget: { installation: 10_000, global: 100_000 },
     });
 
     expect(outcome.status).toBe("labeled");
@@ -141,7 +143,7 @@ describe("runLabelJob", () => {
       store: new FakeStore(),
       ask: jev([]),
       model: "m",
-      dailyTokens: 10_000,
+      budget: { installation: 10_000, global: 100_000 },
     });
     expect(repo.added).toEqual(["area:map"]);
   });
@@ -152,7 +154,7 @@ describe("runLabelJob", () => {
       store,
       ask: jev([]),
       model: "m",
-      dailyTokens: 10_000,
+      budget: { installation: 10_000, global: 100_000 },
     });
     expect(await runLabelJob(job, options(new FakeRepo(null, pull)))).toEqual({
       status: "skipped",
@@ -172,7 +174,13 @@ describe("runLabelJob", () => {
     spent.spent = 10_000;
     expect(
       await runLabelJob(job, options(new FakeRepo(CONFIG, pull), spent)),
-    ).toMatchObject({ reason: "daily budget spent" });
+    ).toMatchObject({ reason: "monthly budget spent" });
+
+    const global = new FakeStore();
+    global.globalSpent = 100_000;
+    expect(
+      await runLabelJob(job, options(new FakeRepo(CONFIG, pull), global)),
+    ).toMatchObject({ reason: "global budget spent" });
   });
 });
 
