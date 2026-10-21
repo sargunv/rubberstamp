@@ -15,7 +15,16 @@ export function Wordmark({ className = "" }: { className?: string }) {
 }
 
 /** The site header, showing the account and repository a page is about. */
-export function Header({ owner, repo }: { owner?: string; repo?: string }) {
+export function Header({
+  owner,
+  repo,
+  bare = false,
+}: {
+  owner?: string;
+  repo?: string;
+  /** Only the wordmark, for before anything is known about the visitor. */
+  bare?: boolean;
+}) {
   const account = repo?.split("/")[0] ?? owner;
   const me = useQuery(meQuery).data;
   const signOut = useSignOut();
@@ -53,33 +62,35 @@ export function Header({ owner, repo }: { owner?: string; repo?: string }) {
             ) : null}
           </nav>
         ) : null}
-        <div className="ml-auto flex items-center gap-3">
-          {me ? (
-            <img
-              src={me.avatarUrl}
-              alt={me.login}
-              title={me.login}
-              className="size-7 rounded-full border border-rule"
-            />
-          ) : null}
-          {me ? (
-            <button
-              type="button"
-              disabled={signOut.isPending}
-              onClick={() => signOut.mutate()}
-              className="rounded-[3px] text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
-            >
-              Sign out
-            </button>
-          ) : (
-            <a
-              href="/auth/github"
-              className="rounded-[3px] text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
-            >
-              Sign in
-            </a>
-          )}
-        </div>
+        {bare ? null : (
+          <div className="ml-auto flex items-center gap-3">
+            {me ? (
+              <img
+                src={me.avatarUrl}
+                alt={me.login}
+                title={me.login}
+                className="size-7 rounded-full border border-rule"
+              />
+            ) : null}
+            {me ? (
+              <button
+                type="button"
+                disabled={signOut.isPending}
+                onClick={() => signOut.mutate()}
+                className="rounded-[3px] text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
+              >
+                Sign out
+              </button>
+            ) : (
+              <a
+                href="/auth/github"
+                className="rounded-[3px] text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
+              >
+                Sign in
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </header>
   );

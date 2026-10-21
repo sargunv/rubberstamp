@@ -1,4 +1,4 @@
-import { Wordmark } from "./header.tsx";
+import { Header } from "./header.tsx";
 
 /**
  * A thin line across the top of the window while a page loads. Pages show
@@ -16,12 +16,15 @@ export function PendingBar() {
   );
 }
 
-/** The first load, before anything is known about the visitor. */
+/**
+ * The first load, before anything is known about the visitor: the header's
+ * wordmark where every page has it, so nothing moves when the page arrives.
+ */
 export function AppPending() {
   return (
-    <div className="grid flex-1 place-items-center opacity-50">
+    <>
       <PendingBar />
-      <Wordmark />
-    </div>
+      <Header bare />
+    </>
   );
 }
