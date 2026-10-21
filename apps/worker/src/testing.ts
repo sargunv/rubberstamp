@@ -80,6 +80,11 @@ export class FakeRepo implements RepoApi {
       patch: "@@ -1 +1 @@\n-a\n+b",
     },
   ];
+  repository = async () => ({
+    id: this.repoId,
+    full_name: this.fullName,
+    private: this.private,
+  });
   pull = async () => ({
     title: this.item.title,
     body: this.item.body,

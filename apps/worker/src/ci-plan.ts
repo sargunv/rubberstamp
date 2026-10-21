@@ -62,7 +62,7 @@ export type PlanQueryDeps = {
   installationFor(fullName: string): Promise<{ id: number } | null>;
   repo(installationId: number, fullName: string): RepoApi;
   canRead(token: string, repoId: number): Promise<boolean>;
-  store: Pick<Store, "findPlan" | "claim">;
+  store: Pick<Store, "findPlan" | "claim" | "release">;
   enqueue(job: PlanJob): Promise<void>;
   policy: Policy;
   /** Where the dashboard is served. */
@@ -86,18 +86,11 @@ export async function ciPlan(
   const installation = await deps.installationFor(query.repository);
   if (!installation) return NOT_FOUND;
   const repo = deps.repo(installation.id, query.repository);
-  let pull: Pull;
-  try {
-    pull = await repo.pull(query.pull_request);
-  } catch (error) {
-    if (error instanceof GitHubError && error.status === 404) return NOT_FOUND;
-    throw error;
-  }
-
-  const repository = pull.base.repo;
+  const repository = await repo.repository();
   if (!allowed(repository, deps.policy)) return NOT_FOUND;
   // A private repository's plans describe its code, so only someone who can
-  // read it may see them. Fork pull requests on public ones get no token.
+  // read it may see them, or even learn which of its pull requests exist.
+  // Fork pull requests on public ones get no token.
   if (
     repository.private &&
     (token === null || !(await deps.canRead(token, repository.id)))
@@ -106,6 +99,13 @@ export async function ciPlan(
       code: 401,
       body: { error: "Pass a token that can read this repository" },
     };
+  }
+  let pull: Pull;
+  try {
+    pull = await repo.pull(query.pull_request);
+  } catch (error) {
+    if (error instanceof GitHubError && error.status === 404) return NOT_FOUND;
+    throw error;
   }
 
   const url = `${deps.origin}/${repository.full_name}`;
@@ -145,24 +145,33 @@ export async function ciPlan(
   if (pull.head.sha !== query.sha) {
     return everything("a newer push superseded this commit");
   }
+  // Webhooks plan only open pull requests, and nothing gates a closed one's CI.
+  if (pull.state !== "open") return everything("the pull request isn't open");
   // Anyone can ask, as often as they like, so only the first ask in a lease
-  // queues a plan. The claim is never released; it lapses.
+  // queues a plan. The claim lapses rather than being released, unless the
+  // plan never made it into the queue.
   const request = {
     kind: "request",
     repoId: key.repoId,
     number: key.number,
     key: `${key.head} ${key.baseRef} ${key.config}`,
   } as const;
-  if (query.start && (await deps.store.claim(request, crypto.randomUUID()))) {
-    await deps.enqueue({
-      type: "plan",
-      installationId: installation.id,
-      repoId: repository.id,
-      repo: repository.full_name,
-      number: query.pull_request,
-      head: query.sha,
-      base: pull.base.ref,
-    });
+  const owner = crypto.randomUUID();
+  if (query.start && (await deps.store.claim(request, owner))) {
+    try {
+      await deps.enqueue({
+        type: "plan",
+        installationId: installation.id,
+        repoId: repository.id,
+        repo: repository.full_name,
+        number: query.pull_request,
+        head: query.sha,
+        base: pull.base.ref,
+      });
+    } catch (error) {
+      await deps.store.release(request, owner);
+      throw error;
+    }
   }
   return {
     code: 202,

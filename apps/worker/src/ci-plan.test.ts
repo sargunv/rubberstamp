@@ -221,6 +221,36 @@ describe("ciPlan", () => {
     expect((await ciPlan(query(), "good", deps)).code).toBe(200);
   });
 
+  it("doesn't tell a caller without access which private pull requests exist", async () => {
+    const { deps, repo } = setup();
+    repo.private = true;
+    repo.pull = async () => {
+      throw new GitHubError(404, "/repos/o/r/pulls/3", "Not Found");
+    };
+    expect((await ciPlan(query(), null, deps)).code).toBe(401);
+  });
+
+  it("runs everything for a closed pull request without planning it", async () => {
+    const { deps, repo, jobs } = setup();
+    const pull = repo.pull;
+    repo.pull = async () => ({ ...(await pull()), state: "closed" });
+    const reply = await ciPlan(query({ start: true }), null, deps);
+    expect(reply).toMatchObject({ code: 200, body: { all: true } });
+    expect(jobs).toEqual([]);
+  });
+
+  it("frees the request when queueing fails, so the next ask can start it", async () => {
+    const { deps, jobs } = setup();
+    const enqueue = deps.enqueue;
+    deps.enqueue = async () => {
+      throw new Error("queue unavailable");
+    };
+    await expect(ciPlan(query({ start: true }), null, deps)).rejects.toThrow();
+    deps.enqueue = enqueue;
+    await ciPlan(query({ start: true }), null, deps);
+    expect(jobs).toHaveLength(1);
+  });
+
   it("doesn't serve a private repository off the allowlist", async () => {
     const { deps, repo } = setup({ tokens: ["good"], allow: "" });
     repo.private = true;
