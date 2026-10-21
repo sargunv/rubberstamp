@@ -74,9 +74,8 @@ export type PreviewEvent = v.InferOutput<typeof PreviewEvent>;
 /** One item Rubberstamp labeled, as its decision log shows it. */
 export const LogEntry = v.object({
   number: v.number(),
-  /** Missing for runs recorded before titles were. */
-  title: v.nullable(v.string()),
-  type: v.nullable(v.picklist(["issue", "pull request"])),
+  title: v.string(),
+  type: v.picklist(["issue", "pull request"]),
   model: v.string(),
   decisions: v.array(
     v.object({

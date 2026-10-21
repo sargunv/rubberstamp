@@ -41,17 +41,15 @@ export function LogTab({
                 aria-label="Pull request"
                 className="fill-muted"
               />
-            ) : entry.type === "issue" ? (
+            ) : (
               <IssueOpenedIcon
                 size={16}
                 aria-label="Issue"
                 className="fill-muted"
               />
-            ) : null
+            )
           }
-          title={
-            entry.title ?? <span className="text-muted">#{entry.number}</span>
-          }
+          title={entry.title}
           meta={`Labeled ${when.format(new Date(entry.createdAt))} with ${entry.model}`}
           labels={
             entry.added.length === 0 ? (

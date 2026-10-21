@@ -5,8 +5,8 @@ import * as v from "valibot";
 const RunRow = v.pipe(
   v.object({
     number: v.number(),
-    title: v.nullable(v.string()),
-    type: v.nullable(v.picklist(["issue", "pull request"])),
+    title: v.string(),
+    type: v.picklist(["issue", "pull request"]),
     model: v.string(),
     decisions: v.string(),
     added: v.string(),
