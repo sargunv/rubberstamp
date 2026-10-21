@@ -40,16 +40,19 @@ export function RepoFrame({
       {tabs ? (
         <TabList label="Repository">
           <TabLink
-            to="/$owner/$repo"
+            to="/github/$owner/$repo"
             params={{ owner, repo: name }}
             activeOptions={{ exact: true }}
           >
             Activity
           </TabLink>
-          <TabLink to="/$owner/$repo/labels" params={{ owner, repo: name }}>
+          <TabLink
+            to="/github/$owner/$repo/labels"
+            params={{ owner, repo: name }}
+          >
             Labels
           </TabLink>
-          <TabLink to="/$owner/$repo/ci" params={{ owner, repo: name }}>
+          <TabLink to="/github/$owner/$repo/ci" params={{ owner, repo: name }}>
             CI
           </TabLink>
         </TabList>

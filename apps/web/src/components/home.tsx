@@ -60,7 +60,7 @@ export function Home({ list }: { list: RepoList }) {
         [...owners].map(([owner, repos]) => (
           <section key={owner} className="mt-10">
             <h2 className="flex items-baseline gap-2 pb-2 font-mono text-sm">
-              <AppLink to="/$owner" params={{ owner }} variant="name">
+              <AppLink to="/github/$owner" params={{ owner }} variant="name">
                 {owner}
               </AppLink>
               <span className="font-sans text-xs text-muted">

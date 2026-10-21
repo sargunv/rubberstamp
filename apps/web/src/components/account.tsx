@@ -170,7 +170,7 @@ export function AccountPage({ account }: { account: Account }) {
                   meta={
                     <>
                       <AppLink
-                        to="/$owner/$repo"
+                        to="/github/$owner/$repo"
                         params={{ owner, repo: name }}
                         variant="name"
                         className="text-ink"
@@ -359,7 +359,7 @@ function RepoTable({
             >
               <td className="px-3 py-2.5">
                 <AppLink
-                  to="/$owner/$repo"
+                  to="/github/$owner/$repo"
                   params={{ owner, repo: name }}
                   onFocus={() => onHover(repo.name)}
                   onBlur={() => onHover(null)}
