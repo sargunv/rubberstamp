@@ -6,6 +6,7 @@ import type { Group } from "../preview.ts";
 import { requirement } from "../preview.ts";
 import { Button } from "../ui/button.tsx";
 import { Anchor } from "../ui/link.tsx";
+import { Section } from "../ui/section.tsx";
 import { DescribedLabel } from "./label.tsx";
 
 /** The config's context, two lines until expanded. */
@@ -29,7 +30,7 @@ function Context({ text }: { text: string }) {
   );
 }
 
-/** A repository's label groups, with what Jev reads about each label. */
+/** A repository's label groups and CI units, with what Jev reads about each. */
 export function ConfigView({
   repo,
   path,
@@ -99,6 +100,37 @@ export function ConfigView({
           ))}
         </dl>
       </Tooltip.Provider>
+      {config?.ci ? (
+        <Section title="CI units" className="mt-10">
+          <dl className="mt-2 border-t border-rule">
+            {config.ci.context ? (
+              <Context text={config.ci.context.trim()} />
+            ) : null}
+            {Object.entries(config.ci.units).map(([id, unit]) => (
+              <div
+                key={id}
+                className="grid gap-x-6 gap-y-2 border-b border-rule py-3 md:grid-cols-[12rem_1fr]"
+              >
+                <dt className="font-mono text-sm font-medium">{id}</dt>
+                <dd className="max-w-3xl text-sm">
+                  <p className="text-muted">{unit.covers}</p>
+                  {unit.paths.length > 0 ? (
+                    <p className="mt-2 text-xs text-muted">
+                      Always runs for changes to{" "}
+                      {unit.paths.map((path, i) => (
+                        <span key={path}>
+                          {i > 0 ? ", " : null}
+                          <code className="font-mono text-ink">{path}</code>
+                        </span>
+                      ))}
+                    </p>
+                  ) : null}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Section>
+      ) : null}
       {warnings.length > 0 ? (
         <ul className="mt-6 space-y-1 text-sm">
           {warnings.map((warning) => (
