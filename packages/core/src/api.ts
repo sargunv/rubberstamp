@@ -25,6 +25,7 @@ const Allowance = v.object({ used: v.number() });
 export const RepoStatus = v.variant("status", [
   v.object({ status: v.literal("not installed"), installUrl: v.string() }),
   v.object({ status: v.literal("not allowed") }),
+  v.object({ status: v.literal("archived") }),
   v.object({ status: v.literal("no config") }),
   v.object({
     status: v.literal("invalid config"),

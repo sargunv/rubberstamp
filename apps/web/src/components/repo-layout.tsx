@@ -99,6 +99,12 @@ function Unready({ status }: { status: RepoStatus | null }) {
   switch (status.status) {
     case "not allowed":
       return <Notice>Private repositories need an invitation.</Notice>;
+    case "archived":
+      return (
+        <Notice>
+          This repository is archived, so Rubberstamp doesn't label it.
+        </Notice>
+      );
     case "not installed":
       return (
         <Notice>

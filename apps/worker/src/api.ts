@@ -21,7 +21,9 @@ import {
   type Session,
 } from "./auth/session.ts";
 import { budgetFor, budgetPeriod, type Budgets } from "./budget.ts";
+import type { UserRepo } from "./github/client.ts";
 import { services } from "./services.ts";
+import type { Policy } from "./webhooks.ts";
 
 type Env_ = { Bindings: Env; Variables: { session: Session } };
 
@@ -106,15 +108,25 @@ api.get("/me", (c) => {
   return c.json({ login, avatarUrl } satisfies Me);
 });
 
+/**
+ * Whether the user can tune a repository from the dashboard: they can write to
+ * it, it isn't archived, and it's public or invited. GitHub can't filter
+ * installation repositories by any of these, so the lists filter here.
+ */
+function tunable(repo: UserRepo, policy: Policy): boolean {
+  return (
+    Boolean(repo.permissions?.push || repo.permissions?.admin) &&
+    !repo.archived &&
+    (!repo.private || allowlisted(policy.privateAllowlist, repo.full_name))
+  );
+}
+
 api.get("/repos", async (c) => {
   const { github, policy } = services(c.env);
   const repos = await github.user(c.get("session").token).repos();
   const list: RepoList = {
     repos: repos
-      .filter((r) => r.permissions?.push || r.permissions?.admin)
-      .filter(
-        (r) => !r.private || allowlisted(policy.privateAllowlist, r.full_name),
-      )
+      .filter((r) => tunable(r, policy))
       .map((r) => ({ name: r.full_name, private: r.private }))
       .sort((a, b) => a.name.localeCompare(b.name)),
     installUrl: installUrl(c.env),
@@ -145,6 +157,9 @@ async function access(c: Context<Env_>): Promise<Access> {
   }
   if (repo.private && !allowlisted(policy.privateAllowlist, repo.full_name)) {
     return { ok: false, status: { status: "not allowed" } };
+  }
+  if (repo.archived) {
+    return { ok: false, status: { status: "archived" } };
   }
   if (!installation) {
     return {
@@ -271,10 +286,7 @@ api.get("/accounts/:owner", async (c) => {
   const seen = new Set(visible.map((r) => r.full_name));
 
   const repos = visible
-    .filter((r) => r.permissions?.push || r.permissions?.admin)
-    .filter(
-      (r) => !r.private || allowlisted(policy.privateAllowlist, r.full_name),
-    )
+    .filter((r) => tunable(r, policy))
     .map((r) => ({
       name: r.full_name,
       private: r.private,
