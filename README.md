@@ -32,3 +32,9 @@ group's labels an item gets.
 
 See [AGENTS.md](AGENTS.md) for how the code is laid out and the commands to
 build, test, and run it.
+
+## License
+
+[AGPL-3.0-or-later](LICENSE). See the
+[privacy policy](https://rubberstamp.sargunv.dev/privacy) for how the hosted app
+handles data.

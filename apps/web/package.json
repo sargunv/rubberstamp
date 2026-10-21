@@ -1,6 +1,7 @@
 {
   "name": "@sargunv/rubberstamp-web",
   "private": true,
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": { "dev": "vp dev", "build": "vp build" },
   "dependencies": {

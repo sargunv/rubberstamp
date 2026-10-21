@@ -62,14 +62,23 @@ export function Header({ owner, repo }: { owner?: string; repo?: string }) {
               className="size-7 rounded-full border border-rule"
             />
           ) : null}
-          <button
-            type="button"
-            disabled={signOut.isPending}
-            onClick={() => signOut.mutate()}
-            className="rounded-[3px] text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
-          >
-            Sign out
-          </button>
+          {me ? (
+            <button
+              type="button"
+              disabled={signOut.isPending}
+              onClick={() => signOut.mutate()}
+              className="rounded-[3px] text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
+            >
+              Sign out
+            </button>
+          ) : (
+            <a
+              href="/auth/github"
+              className="rounded-[3px] text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
+            >
+              Sign in
+            </a>
+          )}
         </div>
       </div>
     </header>

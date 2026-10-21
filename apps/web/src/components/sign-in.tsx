@@ -2,7 +2,7 @@ import { Stamp } from "./stamp.tsx";
 
 export function SignIn() {
   return (
-    <main className="grid min-h-dvh place-items-center px-6 py-16">
+    <main className="grid flex-1 place-items-center px-6 py-16">
       <div className="flex flex-col items-center gap-10">
         <h1>
           <Stamp seed="rubberstamp" className="signin-stamp">

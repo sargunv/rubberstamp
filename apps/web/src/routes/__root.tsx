@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createRootRouteWithContext, Outlet } from "@tanstack/react-router";
 
+import { Footer } from "../components/footer.tsx";
 import { AppSkeleton } from "../components/skeleton.tsx";
 import { meQuery } from "../queries.ts";
 
@@ -10,7 +11,16 @@ export const Route = createRootRouteWithContext<{
   beforeLoad: async ({ context }) => ({
     me: await context.queryClient.ensureQueryData(meQuery),
   }),
-  component: Outlet,
+  component: function Root() {
+    return (
+      <div className="flex min-h-dvh flex-col">
+        <div className="flex flex-1 flex-col">
+          <Outlet />
+        </div>
+        <Footer />
+      </div>
+    );
+  },
   pendingComponent: AppSkeleton,
   errorComponent: function Failed({ error, reset }) {
     return (
