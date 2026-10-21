@@ -2,6 +2,7 @@ import {
   Account,
   Log,
   Me,
+  Plans,
   PreviewEvent,
   PreviewState,
   RepoList,
@@ -76,6 +77,10 @@ export async function getAccount(owner: string): Promise<Account | null> {
 
 export function getLog(name: string): Promise<Log> {
   return call(Log, `/api/repos/${name}/log`);
+}
+
+export function getPlans(name: string): Promise<Plans> {
+  return call(Plans, `/api/repos/${name}/plans`);
 }
 
 export function getPreview(name: string): Promise<PreviewState> {

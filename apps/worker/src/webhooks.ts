@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { allowlisted, type Allowlist } from "./allowlist.ts";
 import type { LabelJob } from "./jobs/label.ts";
+import type { PlanJob } from "./jobs/plan.ts";
 
 const Repository = v.object({
   id: v.number(),
@@ -18,7 +19,18 @@ const ItemFields = {
 };
 
 const IssuesEvent = v.object({ ...ItemFields, issue: Item });
-const PullRequestEvent = v.object({ ...ItemFields, pull_request: Item });
+const PullRequestEvent = v.object({
+  ...ItemFields,
+  pull_request: v.object({
+    ...Item.entries,
+    head: v.object({ sha: v.string() }),
+    base: v.object({ ref: v.string() }),
+  }),
+  changes: v.optional(v.object({ base: v.optional(v.unknown()) })),
+});
+
+/** Pull request actions that leave it at a head no plan has judged. */
+const NEW_HEAD = new Set(["opened", "reopened", "synchronize"]);
 
 const InstallationEvent = v.object({
   action: v.string(),
@@ -35,7 +47,7 @@ const InstallationRepositoriesEvent = v.object({
 });
 
 export type Effects = {
-  jobs: LabelJob[];
+  jobs: (LabelJob | PlanJob)[];
   installations: { id: number; account: string; deleted: boolean }[];
   /** Runs to delete: the whole installation's, or only some repositories'. */
   forget: { installationId: number; repoIds?: number[] }[];
@@ -106,6 +118,23 @@ export function webhookEffects(
       repoId: repository.id,
       repo: repository.full_name,
       number: item.number,
+    });
+  }
+  // Retargeting a pull request, as a stack does when its parent merges,
+  // changes what it would merge without changing its head.
+  if (
+    "pull_request" in parsed.output &&
+    (NEW_HEAD.has(action) ||
+      (action === "edited" && parsed.output.changes?.base !== undefined))
+  ) {
+    effects.jobs.push({
+      type: "plan",
+      installationId: installation.id,
+      repoId: repository.id,
+      repo: repository.full_name,
+      number: item.number,
+      head: parsed.output.pull_request.head.sha,
+      base: parsed.output.pull_request.base.ref,
     });
   }
   return effects;

@@ -105,6 +105,7 @@ export class RepoPreviews extends DurableObject<Env> {
       target.installationId,
       period,
       target.repo,
+      "labels",
       result.preview.inputTokens,
     );
     await this.ctx.storage.put("preview", result.preview);

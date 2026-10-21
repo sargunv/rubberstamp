@@ -16,7 +16,7 @@ import { ErrorText, Notice } from "../ui/section.tsx";
 import { SegmentedControl } from "../ui/segmented.tsx";
 import { ItemState } from "./item-state.tsx";
 import { LabelDiff } from "./label.tsx";
-import { date, Ledger, LedgerRow } from "./ledger.tsx";
+import { date, LabelScores, Ledger, LedgerRow } from "./ledger.tsx";
 
 /** The fraction of this month's allowance used so far. */
 type Allowance = { used: number };
@@ -170,7 +170,7 @@ function PreviewRow({
       icon={<ItemState item={item} />}
       title={item.title}
       meta={`${item.author} · ${date.format(new Date(item.createdAt))}`}
-      labels={
+      chips={
         diff.length === 0 ? (
           <Notice className="text-sm">No labels</Notice>
         ) : (
@@ -183,9 +183,13 @@ function PreviewRow({
           ))
         )
       }
-      groups={preview.groups}
-      decisions={item.decisions}
-      colors={colors}
+      scores={
+        <LabelScores
+          groups={preview.groups}
+          decisions={item.decisions}
+          colors={colors}
+        />
+      }
     />
   );
 }

@@ -11,7 +11,7 @@ import {
   type Response,
 } from "@sargunv/rubberstamp-core";
 
-import { budgetPeriod, type Budget } from "../budget.ts";
+import { budgetPeriod, budgetSpent, type Budget } from "../budget.ts";
 import type { RepoApi } from "../github/client.ts";
 import type { Store } from "../store.ts";
 
@@ -68,14 +68,13 @@ export async function runLabelJob(
   }
 
   const period = budgetPeriod(deps.now?.() ?? new Date());
-  if (
-    (await store.usage(job.installationId, period)) >= deps.budget.installation
-  ) {
-    return { status: "skipped", reason: "monthly budget spent", warnings };
-  }
-  if ((await store.globalUsage(period)) >= deps.budget.global) {
-    return { status: "skipped", reason: "global budget spent", warnings };
-  }
+  const spent = await budgetSpent(
+    store,
+    job.installationId,
+    period,
+    deps.budget,
+  );
+  if (spent) return { status: "skipped", reason: spent, warnings };
 
   const issue = await repo.issue(job.number);
   const item: Item =
@@ -93,6 +92,7 @@ export async function runLabelJob(
     job.installationId,
     period,
     job.repo,
+    "labels",
     response.usage.input_tokens,
   );
 

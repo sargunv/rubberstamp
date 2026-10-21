@@ -1,7 +1,7 @@
-import type { Request, Response } from "@sargunv/rubberstamp-core";
+import type { PullFile, Request, Response } from "@sargunv/rubberstamp-core";
 
 import type { Issue, ListedItem, RepoApi } from "./github/client.ts";
-import type { LabelRun, Store } from "./store.ts";
+import type { CiPlan, LabelRun, Store, UsageKind } from "./store.ts";
 
 export const CONFIG = `
 context: A C API for MapLibre Native.
@@ -59,7 +59,10 @@ export class FakeRepo implements RepoApi {
       labels: [...this.item.labels, ...extra.map((name) => ({ name }))],
     };
   };
-  pullFiles = async () => [
+  /** The pull request's head and files, which a test may change. */
+  head = "abc123";
+  base = "main";
+  files: PullFile[] = [
     {
       filename: "src/map.cpp",
       status: "modified",
@@ -68,6 +71,15 @@ export class FakeRepo implements RepoApi {
       patch: "@@ -1 +1 @@\n-a\n+b",
     },
   ];
+  pull = async () => ({
+    title: this.item.title,
+    body: this.item.body,
+    state: this.item.state,
+    head: { sha: this.head },
+    base: { ref: this.base, sha: "base123" },
+    changed_files: this.files.length,
+  });
+  pullFiles = async () => this.files;
   recentItems = async (count: number) => this.recent.slice(0, count);
   addLabels = async (_: number, labels: string[]) => {
     this.added.push(...labels);
@@ -81,11 +93,25 @@ export class FakeStore implements Store {
   usage = async () => this.spent;
   globalSpent = 0;
   globalUsage = async () => this.globalSpent;
-  addUsage = async (_: number, __: string, ___: string, tokens: number) => {
+  usageKinds: UsageKind[] = [];
+  addUsage = async (
+    _: number,
+    __: string,
+    ___: string,
+    kind: UsageKind,
+    tokens: number,
+  ) => {
     this.spent += tokens;
+    this.usageKinds.push(kind);
   };
   saveLabelRun = async (run: LabelRun) => {
     this.runs.push(run);
   };
   saveInstallation = async () => {};
+  plans: CiPlan[] = [];
+  hasPlan = async (_: number, __: number, head: string, baseRef: string) =>
+    this.plans.some((plan) => plan.head === head && plan.baseRef === baseRef);
+  savePlan = async (plan: CiPlan) => {
+    this.plans.push(plan);
+  };
 }

@@ -20,7 +20,14 @@ type Decision = {
 };
 
 /** Ruled rows of items, numbered in a red margin like a ledger. */
-export function Ledger({ children }: { children: ReactNode }) {
+export function Ledger({
+  column = "Labels",
+  children,
+}: {
+  /** What the rows' chips are. */
+  column?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="ledger relative mt-3 border-t border-rule">
       <div
@@ -29,7 +36,7 @@ export function Ledger({ children }: { children: ReactNode }) {
       >
         <span />
         <span className="pl-5">Item</span>
-        <span>Labels</span>
+        <span>{column}</span>
         <span />
       </div>
       <ol>{children}</ol>
@@ -37,7 +44,7 @@ export function Ledger({ children }: { children: ReactNode }) {
   );
 }
 
-/** One item: its number, title, labels, and Jev's scores on demand. */
+/** One item: its number, title, chips, and Jev's scores on demand. */
 export function LedgerRow({
   number,
   url,
@@ -45,10 +52,8 @@ export function LedgerRow({
   icon,
   title,
   meta,
-  labels,
-  groups,
-  decisions,
-  colors,
+  chips,
+  scores,
 }: {
   number: number;
   url: string;
@@ -57,12 +62,10 @@ export function LedgerRow({
   icon: ReactNode;
   title: ReactNode;
   meta: ReactNode;
-  labels: ReactNode;
-  /** Without groups, the row has no scores to show. */
-  groups?: Group[];
-  decisions?: Decision[];
-  /** Label colors by name, for the scores. */
-  colors?: Map<string, string>;
+  /** What Rubberstamp chose, such as labels or CI units. */
+  chips: ReactNode;
+  /** Without scores, the row has nothing to disclose. */
+  scores?: ReactNode;
 }) {
   return (
     <Collapsible.Root
@@ -94,10 +97,10 @@ export function LedgerRow({
       </div>
 
       <div className="col-start-2 flex flex-wrap content-start items-center gap-x-2 gap-y-1.5 pb-3 pl-5 lg:col-start-auto lg:py-4 lg:pl-0">
-        {labels}
+        {chips}
       </div>
 
-      {groups && decisions ? (
+      {scores ? (
         <>
           <div className="col-start-2 pb-4 pl-5 lg:col-start-auto lg:flex lg:items-start lg:justify-end lg:py-4 lg:pl-0">
             <DisclosureTrigger className="-ml-1.5 px-1.5 py-0.5 lg:-mr-1.5 lg:ml-0">
@@ -106,20 +109,60 @@ export function LedgerRow({
           </div>
 
           <DisclosurePanel className="col-span-full col-start-2">
-            <div className="grid gap-x-10 gap-y-6 pt-1 pb-6 pl-5 sm:grid-cols-2 lg:grid-cols-3">
-              {groups.map((g) => (
-                <GroupScores
-                  key={g.id}
-                  group={g}
-                  decisions={decisions.filter((d) => d.group === g.id)}
-                  colors={colors ?? new Map()}
-                />
-              ))}
-            </div>
+            <div className="pt-1 pb-6 pl-5">{scores}</div>
           </DisclosurePanel>
         </>
       ) : null}
     </Collapsible.Root>
+  );
+}
+
+/** Each label group's scores, for a row's disclosure. */
+export function LabelScores({
+  groups,
+  decisions,
+  colors,
+}: {
+  groups: Group[];
+  decisions: Decision[];
+  colors: Map<string, string>;
+}) {
+  return (
+    <div className="grid gap-x-10 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
+      {groups.map((g) => (
+        <GroupScores
+          key={g.id}
+          group={g}
+          decisions={decisions.filter((d) => d.group === g.id)}
+          colors={colors}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** A probability as a bar, with a tick at the threshold it's judged against. */
+export function ScoreBar({
+  score,
+  threshold,
+  passed,
+}: {
+  score: number;
+  threshold: number;
+  passed: boolean;
+}) {
+  return (
+    <span className="relative h-1.5 rounded-full bg-rule">
+      <span
+        className={`absolute inset-y-0 left-0 rounded-full ${passed ? "bg-violet" : "bg-muted/50"}`}
+        style={{ width: `${Math.max(score * 100, 1)}%` }}
+      />
+      <span
+        aria-hidden
+        className="absolute -inset-y-1 w-px bg-ink"
+        style={{ left: `${threshold * 100}%` }}
+      />
+    </span>
   );
 }
 
@@ -159,17 +202,11 @@ function GroupScores({
                 meaning={meanings.get(d.label) ?? "No description"}
               />
             </span>
-            <span className="relative h-1.5 rounded-full bg-rule">
-              <span
-                className={`absolute inset-y-0 left-0 rounded-full ${d.add ? "bg-violet" : "bg-muted/50"}`}
-                style={{ width: `${Math.max(d.score * 100, 1)}%` }}
-              />
-              <span
-                aria-hidden
-                className="absolute -inset-y-1 w-px bg-ink"
-                style={{ left: `${group.threshold * 100}%` }}
-              />
-            </span>
+            <ScoreBar
+              score={d.score}
+              threshold={group.threshold}
+              passed={d.add}
+            />
             <span className="text-right font-mono tabular-nums">
               {d.score.toFixed(2)}
             </span>

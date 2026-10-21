@@ -3,7 +3,7 @@ import type { LogEntry } from "@sargunv/rubberstamp-core";
 import { Notice } from "../ui/section.tsx";
 import { ItemKindIcon } from "./item-state.tsx";
 import { LabelDiff } from "./label.tsx";
-import { Ledger, LedgerRow } from "./ledger.tsx";
+import { LabelScores, Ledger, LedgerRow } from "./ledger.tsx";
 
 const when = new Intl.DateTimeFormat("en", {
   month: "short",
@@ -35,7 +35,7 @@ export function LogTab({
           icon={<ItemKindIcon type={entry.type} />}
           title={entry.title}
           meta={`Labeled ${when.format(new Date(entry.createdAt))} with ${entry.model}`}
-          labels={
+          chips={
             entry.added.length === 0 ? (
               <Notice className="text-sm">No labels added</Notice>
             ) : (
@@ -49,9 +49,13 @@ export function LogTab({
               ))
             )
           }
-          groups={entry.groups}
-          decisions={entry.decisions}
-          colors={colors}
+          scores={
+            <LabelScores
+              groups={entry.groups}
+              decisions={entry.decisions}
+              colors={colors}
+            />
+          }
         />
       ))}
     </Ledger>

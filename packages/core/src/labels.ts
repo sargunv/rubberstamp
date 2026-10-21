@@ -1,5 +1,6 @@
 import type { Config } from "./config.ts";
 import { squash } from "./describe.ts";
+import { glob } from "./glob.ts";
 import type { Answer, Json, Question } from "./jev.ts";
 
 export type RepoLabel = { name: string; description: string | null };
@@ -24,15 +25,6 @@ export type Resolution = { groups: ResolvedGroup[]; warnings: string[] };
 const DEFAULT_THRESHOLD = { choice: 0.5, noul: 0.8 };
 export const NONE = "none of these";
 
-function matcher(pattern: string): (name: string) => boolean {
-  const escaped = pattern
-    .split("*")
-    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
-    .join(".*");
-  const regex = new RegExp(`^${escaped}$`, "i");
-  return (name) => regex.test(name);
-}
-
 /** Match the configured groups against the labels that exist on the repo. */
 export function resolveLabels(
   config: Config,
@@ -54,7 +46,7 @@ export function resolveLabels(
     const labels: ResolvedLabel[] = [];
     for (const pattern of group.labels) {
       const matches = repoLabels.filter((label) =>
-        matcher(pattern)(label.name),
+        glob(pattern, { ignoreCase: true })(label.name),
       );
       if (matches.length === 0) {
         warnings.push(`Group ${id}: no repository label matches "${pattern}".`);

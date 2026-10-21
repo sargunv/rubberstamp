@@ -5,6 +5,7 @@ import {
   resolveLabels,
   type Log,
   type Me,
+  type Plans,
   type PreviewState,
   type RepoList,
   type RepoStatus,
@@ -233,6 +234,13 @@ api.get("/repos/:owner/:repo/log", (c) =>
   withRepo(c, async ({ repo }) => {
     const entries = await services(c.env).store.recentRuns(repo, 50);
     return c.json({ entries } satisfies Log);
+  }),
+);
+
+api.get("/repos/:owner/:repo/plans", (c) =>
+  withRepo(c, async ({ repo }) => {
+    const plans = await services(c.env).store.recentPlans(repo, 50);
+    return c.json({ plans } satisfies Plans);
   }),
 );
 

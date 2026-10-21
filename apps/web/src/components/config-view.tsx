@@ -1,5 +1,5 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { parseConfig } from "@sargunv/rubberstamp-core";
+import { ciUnits, parseConfig } from "@sargunv/rubberstamp-core";
 import { useState, type ReactNode } from "react";
 
 import type { Group } from "../preview.ts";
@@ -145,8 +145,12 @@ export function ConfigView({
 
       {config?.ci ? (
         <ConfigSection title="CI units" context={config.ci.context}>
-          {Object.entries(config.ci.units).map(([id, unit]) => (
-            <Entry key={id} id={id}>
+          {ciUnits(config).map((unit) => (
+            <Entry
+              key={unit.id}
+              id={unit.id}
+              detail={`threshold ${unit.threshold.toFixed(2)}`}
+            >
               <p className="text-muted">{unit.covers}</p>
               {unit.paths.length > 0 ? (
                 <p className="mt-2 text-xs text-muted">
