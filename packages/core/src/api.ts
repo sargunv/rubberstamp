@@ -105,10 +105,6 @@ export const LogEntry = v.object({
 
 export type LogEntry = v.InferOutput<typeof LogEntry>;
 
-export const Log = v.object({ entries: v.array(LogEntry) });
-
-export type Log = v.InferOutput<typeof Log>;
-
 /** A pull request head's CI plan. */
 export const PlanEntry = v.object({
   number: v.number(),
@@ -123,9 +119,25 @@ export const PlanEntry = v.object({
 
 export type PlanEntry = v.InferOutput<typeof PlanEntry>;
 
-export const Plans = v.object({ plans: v.array(PlanEntry) });
+/** One issue or pull request, and everything Rubberstamp did on it. */
+export const ActivityItem = v.object({
+  number: v.number(),
+  type: v.picklist(["issue", "pull request"]),
+  /** The title as of Rubberstamp's latest action on it. */
+  title: v.string(),
+  /** When Rubberstamp last acted on it. */
+  at: v.string(),
+  labels: v.optional(LogEntry),
+  /** The latest plan, for the pull request's current head. */
+  plan: v.optional(PlanEntry),
+});
 
-export type Plans = v.InferOutput<typeof Plans>;
+export type ActivityItem = v.InferOutput<typeof ActivityItem>;
+
+/** A repository's most recently acted-on items, most recent first. */
+export const Activity = v.object({ items: v.array(ActivityItem) });
+
+export type Activity = v.InferOutput<typeof Activity>;
 
 /** A label run anywhere in an account, for its activity list. */
 export const ActivityEntry = v.object({

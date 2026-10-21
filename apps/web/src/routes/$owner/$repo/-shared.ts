@@ -1,3 +1,4 @@
+import { parseConfig } from "@sargunv/rubberstamp-core";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
@@ -16,6 +17,9 @@ export function useReadyRepo() {
   if (status?.status !== "ready") {
     throw new Error(`${name} isn't ready for tabs`);
   }
+  const parsed = parseConfig(status.config.source);
+  // The server only calls a repository ready once its config parses.
+  if (!parsed.ok) throw new Error(`${name}'s config doesn't parse`);
   const colors = new Map(status.config.labels.map((l) => [l.name, l.color]));
-  return { repo: name, status, colors };
+  return { repo: name, status, config: parsed.config, colors };
 }

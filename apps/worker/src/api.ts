@@ -3,9 +3,8 @@ import {
   type Account,
   previewGroups,
   resolveLabels,
-  type Log,
+  type Activity,
   type Me,
-  type Plans,
   type PreviewState,
   type RepoList,
   type RepoStatus,
@@ -230,17 +229,10 @@ api.get("/repos/:owner/:repo", async (c) => {
   return c.json(status);
 });
 
-api.get("/repos/:owner/:repo/log", (c) =>
+api.get("/repos/:owner/:repo/activity", (c) =>
   withRepo(c, async ({ repo }) => {
-    const entries = await services(c.env).store.recentRuns(repo, 50);
-    return c.json({ entries } satisfies Log);
-  }),
-);
-
-api.get("/repos/:owner/:repo/plans", (c) =>
-  withRepo(c, async ({ repo }) => {
-    const plans = await services(c.env).store.recentPlans(repo, 50);
-    return c.json({ plans } satisfies Plans);
+    const items = await services(c.env).store.recentActivity(repo, 50);
+    return c.json({ items } satisfies Activity);
   }),
 );
 

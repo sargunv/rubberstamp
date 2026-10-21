@@ -44,13 +44,10 @@ export function RepoFrame({
             params={{ owner, repo: name }}
             activeOptions={{ exact: true }}
           >
-            Config
+            Activity
           </TabLink>
-          <TabLink to="/$owner/$repo/log" params={{ owner, repo: name }}>
-            Log
-          </TabLink>
-          <TabLink to="/$owner/$repo/preview" params={{ owner, repo: name }}>
-            Preview
+          <TabLink to="/$owner/$repo/labels" params={{ owner, repo: name }}>
+            Labels
           </TabLink>
           <TabLink to="/$owner/$repo/ci" params={{ owner, repo: name }}>
             CI

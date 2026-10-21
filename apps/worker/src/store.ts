@@ -2,6 +2,7 @@ import {
   LogEntry,
   PlanEntry,
   type ActivityEntry,
+  type ActivityItem,
   type LabelDecision,
   type PreviewGroup,
   type UnitDecision,
@@ -62,6 +63,38 @@ const PlanRow = v.pipe(
   })),
   PlanEntry,
 );
+
+/** One of recentActivity's rows: an item, and its run and plan if it has them. */
+function activityItem(row: Record<string, unknown>): ActivityItem {
+  // The run's and plan's columns are prefixed, so each parses as its own row.
+  const part = (prefix: string): Record<string, unknown> => ({
+    number: row["number"],
+    ...Object.fromEntries(
+      Object.entries(row)
+        .filter(([key]) => key.startsWith(prefix))
+        .map(([key, value]) => [key.slice(prefix.length), value]),
+    ),
+  });
+  const run = part("run_");
+  const plan = part("plan_");
+  const labels = run["created_at"] == null ? undefined : v.parse(RunRow, run);
+  const latest =
+    plan["created_at"] == null ? undefined : v.parse(PlanRow, plan);
+  // Titles change, so the item takes the one from Rubberstamp's latest action.
+  const newest =
+    latest && (!labels || latest.createdAt >= labels.createdAt)
+      ? latest
+      : labels;
+  if (!newest) throw new Error("An activity row has neither a run nor a plan");
+  return {
+    number: newest.number,
+    type: labels?.type ?? "pull request",
+    title: newest.title,
+    at: newest.createdAt,
+    ...(labels ? { labels } : {}),
+    ...(latest ? { plan: latest } : {}),
+  };
+}
 
 /** What spent Jev usage, within the same allowance. */
 export type UsageKind = "labels" | "ci";
@@ -272,16 +305,47 @@ export class CloudflareStore implements Store {
       .run();
   }
 
-  /** A repository's newest CI plans, newest first. */
-  async recentPlans(repo: string, limit: number): Promise<PlanEntry[]> {
+  /**
+   * The repository's most recently acted-on issues and pull requests, each
+   * with its latest label run and latest plan, most recent first.
+   */
+  async recentActivity(repo: string, limit: number): Promise<ActivityItem[]> {
     const { results } = await this.db
       .prepare(
-        `SELECT number, title, head_sha, model, decisions, input_tokens, created_at
-         FROM ci_plans WHERE repo = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
+        `WITH runs AS (
+           SELECT * FROM label_runs l WHERE repo = ?1 AND id = (
+             SELECT MAX(id) FROM label_runs
+             WHERE repo_id = l.repo_id AND number = l.number
+           )
+         ),
+         plans AS (
+           SELECT * FROM ci_plans p WHERE repo = ?1 AND id = (
+             SELECT MAX(id) FROM ci_plans
+             WHERE repo_id = p.repo_id AND number = p.number
+           )
+         ),
+         items AS (
+           SELECT number, MAX(at) AS at FROM (
+             SELECT number, created_at AS at FROM runs
+             UNION ALL SELECT number, created_at FROM plans
+           ) GROUP BY number ORDER BY at DESC LIMIT ?2
+         )
+         SELECT i.number,
+           r.title AS run_title, r.type AS run_type, r.model AS run_model,
+           r.decisions AS run_decisions, r.added AS run_added,
+           r.groups AS run_groups, r.input_tokens AS run_input_tokens,
+           r.created_at AS run_created_at,
+           p.title AS plan_title, p.head_sha AS plan_head_sha,
+           p.model AS plan_model, p.decisions AS plan_decisions,
+           p.input_tokens AS plan_input_tokens, p.created_at AS plan_created_at
+         FROM items i
+         LEFT JOIN runs r ON r.number = i.number
+         LEFT JOIN plans p ON p.number = i.number
+         ORDER BY i.at DESC`,
       )
       .bind(repo, limit)
       .all();
-    return results.map((row) => v.parse(PlanRow, row));
+    return results.map(activityItem);
   }
 
   async saveLabelRun(run: LabelRun) {
@@ -318,18 +382,6 @@ export class CloudflareStore implements Store {
       )
       .bind(id, account, deleted ? 1 : 0)
       .run();
-  }
-
-  /** A repository's newest label runs, newest first. */
-  async recentRuns(repo: string, limit: number): Promise<LogEntry[]> {
-    const { results } = await this.db
-      .prepare(
-        `SELECT number, title, type, model, decisions, added, groups, input_tokens, created_at
-         FROM label_runs WHERE repo = ? ORDER BY created_at DESC, id DESC LIMIT ?`,
-      )
-      .bind(repo, limit)
-      .all();
-    return results.map((row) => v.parse(RunRow, row));
   }
 
   /** Forgets an installation's runs and plans, or only some repositories'. */
