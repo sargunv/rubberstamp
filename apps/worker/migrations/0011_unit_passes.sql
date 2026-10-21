@@ -1,8 +1,9 @@
 -- The units a workflow run was told to execute, saved when its plan step asks.
 -- GitHub's workflow_run event says only whether the whole run succeeded, so
 -- this is what ties that outcome to units. A run finishes within hours, so
--- these rows are pruned after days, not with plans. Each attempt of a run asks
--- again, and only the attempt that succeeds counts.
+-- these rows are pruned after days, not with plans. A full re-run asks again
+-- as a new attempt; re-running only failed jobs skips the plan step, so that
+-- attempt runs what the latest earlier attempt saved.
 CREATE TABLE ci_runs (
   installation_id INTEGER NOT NULL,
   repo_id INTEGER NOT NULL,

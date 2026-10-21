@@ -204,8 +204,13 @@ export interface Store {
   /** A plan's decisions and base, or null if there's none for that key yet. */
   findPlan(key: PlanKey): Promise<FoundPlan | null>;
   savePlan(plan: CiPlan): Promise<void>;
-  /** Saves the units a run's attempt executes, replacing any it saved before. */
+  /** Saves the units a run's attempt executes; the first save stands. */
   saveRun(run: CiRun): Promise<void>;
+  /**
+   * The units the given attempt of a run executes: its own, or the latest
+   * earlier attempt's. Re-running only failed jobs skips the plan step, so
+   * that attempt never asks and runs what the attempt before it planned.
+   */
   findRun(
     repoId: number,
     runId: number,
@@ -416,7 +421,7 @@ export class CloudflareStore implements Store {
   async saveRun(run: CiRun) {
     await this.db
       .prepare(
-        `INSERT OR REPLACE INTO ci_runs
+        `INSERT OR IGNORE INTO ci_runs
            (installation_id, repo_id, run_id, run_attempt, number, head_sha, base_sha, units)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
@@ -440,8 +445,9 @@ export class CloudflareStore implements Store {
   ): Promise<CiRun | null> {
     const row = await this.db
       .prepare(
-        `SELECT installation_id, number, head_sha, base_sha, units FROM ci_runs
-         WHERE repo_id = ? AND run_id = ? AND run_attempt = ?`,
+        `SELECT installation_id, run_attempt, number, head_sha, base_sha, units
+         FROM ci_runs WHERE repo_id = ? AND run_id = ? AND run_attempt <= ?
+         ORDER BY run_attempt DESC LIMIT 1`,
       )
       .bind(repoId, runId, attempt)
       .first();
@@ -449,6 +455,7 @@ export class CloudflareStore implements Store {
     const run = v.parse(
       v.object({
         installation_id: v.number(),
+        run_attempt: v.number(),
         number: v.number(),
         head_sha: v.string(),
         base_sha: v.string(),
@@ -460,7 +467,7 @@ export class CloudflareStore implements Store {
       installationId: run.installation_id,
       repoId,
       runId,
-      attempt,
+      attempt: run.run_attempt,
       number: run.number,
       head: run.head_sha,
       base: run.base_sha,

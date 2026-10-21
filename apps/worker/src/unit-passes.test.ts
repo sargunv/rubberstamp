@@ -41,7 +41,11 @@ describe("recordPasses", () => {
     expect(await recordPasses({ ...succeeded, runId: 9002 }, store)).toBe(
       false,
     );
-    expect(await recordPasses({ ...succeeded, attempt: 2 }, store)).toBe(false);
+    // An attempt before the first one that asked has nothing to fall back on.
+    await store.saveRun({ ...asked, runId: 9003, attempt: 2 });
+    expect(
+      await recordPasses({ ...succeeded, runId: 9003, attempt: 1 }, store),
+    ).toBe(false);
     expect(store.passes).toEqual([]);
   });
 
@@ -53,12 +57,33 @@ describe("recordPasses", () => {
     expect(store.passes).toEqual([]);
   });
 
-  it("counts a successful re-run attempt", async () => {
+  it("counts a successful re-run attempt that asked again", async () => {
     const store = new FakeStore();
-    await store.saveRun({ ...asked, attempt: 2 });
+    await store.saveRun(asked);
+    await store.saveRun({ ...asked, attempt: 2, units: ["linux"] });
 
     expect(await recordPasses({ ...succeeded, attempt: 2 }, store)).toBe(true);
-    expect((await store.lastPasses(2, 3)).get("linux")?.head).toBe(HEAD);
+    expect([...(await store.lastPasses(2, 3)).keys()]).toEqual(["linux"]);
+  });
+
+  it("credits a re-run of failed jobs with the latest attempt that asked", async () => {
+    const store = new FakeStore();
+    await store.saveRun(asked);
+    await store.saveRun({ ...asked, attempt: 2, units: ["linux"] });
+
+    // Attempt 3 re-ran only the failed jobs, so its plan step never asked.
+    expect(await recordPasses({ ...succeeded, attempt: 3 }, store)).toBe(true);
+    expect([...(await store.lastPasses(2, 3)).keys()]).toEqual(["linux"]);
+  });
+
+  it("still checks the head of the attempt it falls back on", async () => {
+    const store = new FakeStore();
+    await store.saveRun(asked);
+
+    expect(
+      await recordPasses({ ...succeeded, attempt: 2, head: NEXT }, store),
+    ).toBe(false);
+    expect(store.passes).toEqual([]);
   });
 
   it("records a redelivered run once", async () => {

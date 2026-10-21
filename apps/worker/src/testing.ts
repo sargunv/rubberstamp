@@ -1,6 +1,11 @@
 import type { PullFile, Request, Response } from "@sargunv/rubberstamp-core";
 
-import type { Issue, ListedItem, RepoApi } from "./github/client.ts";
+import type {
+  Issue,
+  ListedItem,
+  RepoApi,
+  WorkflowRun,
+} from "./github/client.ts";
 import type {
   CiPlan,
   CiRun,
@@ -108,6 +113,9 @@ export class FakeRepo implements RepoApi {
   addLabels = async (_: number, labels: string[]) => {
     this.added.push(...labels);
   };
+  /** The repository's workflow runs, by id. */
+  workflowRuns = new Map<number, WorkflowRun>();
+  workflowRun = async (runId: number) => this.workflowRuns.get(runId) ?? null;
 }
 
 export class FakeStore implements Store {
@@ -157,13 +165,21 @@ export class FakeStore implements Store {
   savePlan = async (plan: CiPlan) => {
     this.plans.push(plan);
   };
-  /** Workflow runs by repository, run and attempt, as saveRun replaces them. */
+  /** Workflow runs by repository, run and attempt; the first save stands. */
   ciRuns = new Map<string, CiRun>();
   saveRun = async (run: CiRun) => {
-    this.ciRuns.set(`${run.repoId} ${run.runId} ${run.attempt}`, run);
+    const key = `${run.repoId} ${run.runId} ${run.attempt}`;
+    if (!this.ciRuns.has(key)) this.ciRuns.set(key, run);
   };
   findRun = async (repoId: number, runId: number, attempt: number) =>
-    this.ciRuns.get(`${repoId} ${runId} ${attempt}`) ?? null;
+    [...this.ciRuns.values()]
+      .filter(
+        (run) =>
+          run.repoId === repoId &&
+          run.runId === runId &&
+          run.attempt <= attempt,
+      )
+      .sort((a, b) => b.attempt - a.attempt)[0] ?? null;
   /** Each pass in the order recorded, like unit_passes. */
   passes: (UnitPass & {
     repoId: number;

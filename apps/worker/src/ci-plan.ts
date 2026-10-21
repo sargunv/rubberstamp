@@ -73,7 +73,44 @@ export type PlanQueryDeps = {
   policy: Policy;
   /** Where the dashboard is served. */
   origin: string;
+  now?: () => Date;
 };
+
+/**
+ * How long after a run starts its units can still be recorded. A full re-run
+ * keeps the workflow file of its first attempt but would be judged under
+ * today's config, so an old run could credit units it never knew about.
+ */
+const MAX_RUN_AGE_MS = 24 * 60 * 60_000;
+
+/**
+ * Whether the run a caller names really is a pull_request run of this
+ * repository at the head it asked about, started recently. The endpoint is
+ * public, so a caller could otherwise tie another workflow's success, or one
+ * that ran the base branch's code, to this pull request's units.
+ */
+async function runAsked(
+  repo: RepoApi,
+  repoId: number,
+  runId: number,
+  query: PlanQuery,
+  now: Date,
+): Promise<boolean> {
+  try {
+    const run = await repo.workflowRun(runId);
+    return (
+      run !== null &&
+      run.repository.id === repoId &&
+      run.event === "pull_request" &&
+      run.head_sha.toLowerCase() === query.sha &&
+      now.getTime() - Date.parse(run.created_at) <= MAX_RUN_AGE_MS
+    );
+  } catch (error) {
+    // Recording only saves later CI time, so it never fails the plan.
+    console.error(`${query.repository} run ${runId}`, error);
+    return false;
+  }
+}
 
 const NOT_FOUND = {
   code: 404,
@@ -130,6 +167,10 @@ export async function ciPlan(
   // at this head. Only answers it acts on are recorded, never pending ones.
   const record = async (units: string[], base: string) => {
     if (query.run_id === undefined || query.run_attempt === undefined) return;
+    const now = deps.now?.() ?? new Date();
+    if (!(await runAsked(repo, repository.id, query.run_id, query, now))) {
+      return;
+    }
     await deps.store.saveRun({
       installationId: installation.id,
       repoId: repository.id,
