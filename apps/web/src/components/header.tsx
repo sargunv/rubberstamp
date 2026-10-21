@@ -57,7 +57,7 @@ function Breadcrumb({
       {repo ? (
         <>
           <AppLink
-            to="/$owner"
+            to="/github/$owner"
             params={{ owner }}
             variant="quiet"
             className="px-1 py-1"
@@ -120,7 +120,10 @@ function RepoSwitcher({ repo }: { repo: string }) {
       onValueChange={(next) => {
         if (!next || next === repo) return;
         const [owner = "", name = ""] = next.split("/");
-        void navigate({ to: "/$owner/$repo", params: { owner, repo: name } });
+        void navigate({
+          to: "/github/$owner/$repo",
+          params: { owner, repo: name },
+        });
       }}
     >
       <Combobox.Trigger

@@ -5,10 +5,10 @@ import {
   AccountNotFound,
   AccountPage,
   AccountPending,
-} from "../../components/account.tsx";
-import { accountQuery } from "../../queries.ts";
+} from "../../../components/account.tsx";
+import { accountQuery } from "../../../queries.ts";
 
-export const Route = createFileRoute("/$owner/")({
+export const Route = createFileRoute("/github/$owner/")({
   beforeLoad: ({ context }) => {
     if (!context.me) throw redirect({ to: "/" });
   },

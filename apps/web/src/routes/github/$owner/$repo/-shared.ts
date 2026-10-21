@@ -2,9 +2,9 @@ import { parseConfig } from "@sargunv/rubberstamp-core";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 
-import { repoQuery } from "../../../queries.ts";
+import { repoQuery } from "../../../../queries.ts";
 
-const route = getRouteApi("/$owner/$repo");
+const route = getRouteApi("/github/$owner/$repo");
 
 export function repoName(params: { owner: string; repo: string }): string {
   return `${params.owner}/${params.repo}`;

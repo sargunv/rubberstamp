@@ -1,12 +1,12 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
-import { RepoFrame, RepoLayout } from "../../../components/repo-layout.tsx";
-import { repoQuery } from "../../../queries.ts";
-import { PendingBar } from "../../../ui/progress.tsx";
+import { RepoFrame, RepoLayout } from "../../../../components/repo-layout.tsx";
+import { repoQuery } from "../../../../queries.ts";
+import { PendingBar } from "../../../../ui/progress.tsx";
 import { repoName } from "./-shared.ts";
 
-export const Route = createFileRoute("/$owner/$repo")({
+export const Route = createFileRoute("/github/$owner/$repo")({
   beforeLoad: ({ context }) => {
     if (!context.me) throw redirect({ to: "/" });
   },

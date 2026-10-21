@@ -17,7 +17,7 @@ export function RepoGrid({
         return (
           <li key={repo.name} className="border-b border-rule">
             <AppLink
-              to="/$owner/$repo"
+              to="/github/$owner/$repo"
               params={{ owner, repo: name }}
               variant="name"
               className="flex items-center gap-2 py-2.5 text-sm"
