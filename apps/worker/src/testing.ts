@@ -194,6 +194,7 @@ export class FakeStore implements Store {
     number: number;
     unit: string;
     runId: number;
+    workflow: string;
   })[] = [];
   /** When the next pass is recorded. */
   now = "2026-10-21T00:00:00Z";
@@ -212,13 +213,18 @@ export class FakeStore implements Store {
         head: run.head,
         base: run.base,
         at: this.now,
+        workflow: run.workflow,
       });
     }
   };
-  lastPasses = async (repoId: number, number: number) => {
+  lastPasses = async (repoId: number, number: number, workflow: string) => {
     const last = new Map<string, UnitPass>();
     for (const { unit, head, base, at, ...pass } of this.passes) {
-      if (pass.repoId === repoId && pass.number === number) {
+      if (
+        pass.repoId === repoId &&
+        pass.number === number &&
+        pass.workflow === workflow
+      ) {
         last.set(unit, { head, base, at });
       }
     }

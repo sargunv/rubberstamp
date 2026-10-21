@@ -160,6 +160,8 @@ export type CiRun = {
   head: string;
   base: string;
   units: string[];
+  /** The workflow file the run ran, which its passes count for. */
+  workflow: string;
 };
 
 /** Where a unit last passed for a pull request, and when. */
@@ -218,8 +220,15 @@ export interface Store {
   ): Promise<CiRun | null>;
   /** Records that every unit the run executed passed at its head and base. */
   savePasses(run: CiRun): Promise<void>;
-  /** Each unit's most recent pass for a pull request, by unit id. */
-  lastPasses(repoId: number, number: number): Promise<Map<string, UnitPass>>;
+  /**
+   * Each unit's most recent pass for a pull request in the given workflow, by
+   * unit id. Another workflow's passes say nothing about this one's jobs.
+   */
+  lastPasses(
+    repoId: number,
+    number: number,
+    workflow: string,
+  ): Promise<Map<string, UnitPass>>;
   saveInstallation(
     id: number,
     account: string,
@@ -422,8 +431,8 @@ export class CloudflareStore implements Store {
     await this.db
       .prepare(
         `INSERT OR IGNORE INTO ci_runs
-           (installation_id, repo_id, run_id, run_attempt, number, head_sha, base_sha, units)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (installation_id, repo_id, run_id, run_attempt, number, head_sha, base_sha, units, workflow)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         run.installationId,
@@ -434,6 +443,7 @@ export class CloudflareStore implements Store {
         run.head,
         run.base,
         JSON.stringify(run.units),
+        run.workflow,
       )
       .run();
   }
@@ -445,7 +455,7 @@ export class CloudflareStore implements Store {
   ): Promise<CiRun | null> {
     const row = await this.db
       .prepare(
-        `SELECT installation_id, run_attempt, number, head_sha, base_sha, units
+        `SELECT installation_id, run_attempt, number, head_sha, base_sha, units, workflow
          FROM ci_runs WHERE repo_id = ? AND run_id = ? AND run_attempt <= ?
          ORDER BY run_attempt DESC LIMIT 1`,
       )
@@ -460,6 +470,7 @@ export class CloudflareStore implements Store {
         head_sha: v.string(),
         base_sha: v.string(),
         units: v.string(),
+        workflow: v.string(),
       }),
       row,
     );
@@ -472,6 +483,7 @@ export class CloudflareStore implements Store {
       head: run.head_sha,
       base: run.base_sha,
       units: v.parse(v.array(v.string()), JSON.parse(run.units)),
+      workflow: run.workflow,
     };
   }
 
@@ -479,8 +491,8 @@ export class CloudflareStore implements Store {
     if (run.units.length === 0) return;
     const insert = this.db.prepare(
       `INSERT OR IGNORE INTO unit_passes
-         (installation_id, repo_id, number, unit, head_sha, base_sha, run_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (installation_id, repo_id, number, unit, head_sha, base_sha, run_id, workflow)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     await this.db.batch(
       run.units.map((unit) =>
@@ -492,6 +504,7 @@ export class CloudflareStore implements Store {
           run.head,
           run.base,
           run.runId,
+          run.workflow,
         ),
       ),
     );
@@ -500,16 +513,18 @@ export class CloudflareStore implements Store {
   async lastPasses(
     repoId: number,
     number: number,
+    workflow: string,
   ): Promise<Map<string, UnitPass>> {
     const { results } = await this.db
       .prepare(
         `SELECT unit, head_sha, base_sha, passed_at FROM unit_passes p
-         WHERE repo_id = ?1 AND number = ?2 AND id = (
+         WHERE repo_id = ?1 AND number = ?2 AND workflow = ?3 AND id = (
            SELECT MAX(id) FROM unit_passes
            WHERE repo_id = p.repo_id AND number = p.number AND unit = p.unit
+             AND workflow = p.workflow
          )`,
       )
-      .bind(repoId, number)
+      .bind(repoId, number, workflow)
       .all();
     return new Map(
       results.map((result) => {

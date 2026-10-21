@@ -323,13 +323,14 @@ describe("runPlanJob since a unit last passed", () => {
   /** A pull request now changing `files`, whose units passed at `head`. */
   function setup(
     files: PullFile[],
-    passed: { unit: string; head: string; base: string }[],
+    passed: { unit: string; head: string; base: string; workflow?: string }[],
   ) {
     const repo = new FakeRepo(SINCE, pull);
     repo.files = files;
     const store = new FakeStore();
     for (const pass of passed) {
       store.passes.push({
+        workflow: ".github/workflows/ci.yml",
         ...pass,
         repoId: 2,
         number: 3,
@@ -370,6 +371,25 @@ describe("runPlanJob since a unit last passed", () => {
       path: ".config/rubberstamp.yml",
       source: CONFIG,
     });
+    expect(await run()).toMatchObject({
+      decisions: [{ score: 0.9 }, { score: 0.2 }],
+    });
+    expect(requests).toHaveLength(1);
+  });
+
+  it("ignores passes another workflow, or none, recorded", async () => {
+    const { requests, run } = setup(
+      [MAP],
+      [
+        { unit: "linux-x64", head: "abc123", base: "base123", workflow: "" },
+        {
+          unit: "macos",
+          head: "abc123",
+          base: "base123",
+          workflow: ".github/workflows/lint.yml",
+        },
+      ],
+    );
     expect(await run()).toMatchObject({
       decisions: [{ score: 0.9 }, { score: 0.2 }],
     });

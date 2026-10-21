@@ -304,6 +304,7 @@ describe("ciPlan", () => {
           head: HEAD,
           base: "base123",
           units: ["linux"],
+          workflow: ".github/workflows/ci.yml",
         },
       ]);
     });

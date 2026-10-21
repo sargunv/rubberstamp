@@ -64,8 +64,9 @@ function Privacy() {
           </li>
           <li>
             <b>Which CI passed:</b> for each pull request commit, which CI units
-            each successful workflow run executed, the run, and when. These are
-            deleted on the same schedule as the label log.
+            each successful workflow run executed, the run and its workflow
+            file, and when. These are deleted on the same schedule as the label
+            log.
           </li>
           <li>
             <b>Previews you run in the dashboard:</b> the titles, labels and

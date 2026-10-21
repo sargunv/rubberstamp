@@ -193,6 +193,7 @@ export async function ciPlan(
       head: query.sha,
       base,
       units,
+      workflow,
     });
   };
 

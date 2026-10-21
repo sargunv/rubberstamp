@@ -144,12 +144,13 @@ async function judge(
   const decide = (decisions: UnitDecision[]) => {
     for (const decision of decisions) decided.set(decision.unit, decision);
   };
-  // Only the configured workflow's successes are passes; without one, any
-  // passes left from before can't be trusted either.
+  // Only the configured workflow's successes are passes, and a workflow the
+  // config named before may not gate the same jobs.
+  const workflow = config.ci?.workflow;
   const passes =
-    config.ci?.workflow === undefined
+    workflow === undefined
       ? new Map<string, UnitPass>()
-      : await deps.store.lastPasses(job.repoId, job.number);
+      : await deps.store.lastPasses(job.repoId, job.number, workflow);
   const judgments = await sincePasses(
     job,
     deps,
