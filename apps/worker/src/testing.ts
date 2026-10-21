@@ -76,6 +76,7 @@ export class FakeRepo implements RepoApi {
   /** The pull request's head and files, which a test may change. */
   head = "abc123";
   base = "main";
+  baseSha = "base123";
   repoId = 2;
   private = false;
   files: PullFile[] = [
@@ -99,7 +100,7 @@ export class FakeRepo implements RepoApi {
     head: { sha: this.head },
     base: {
       ref: this.base,
-      sha: "base123",
+      sha: this.baseSha,
       repo: {
         id: this.repoId,
         full_name: this.fullName,
@@ -109,6 +110,13 @@ export class FakeRepo implements RepoApi {
     changed_files: this.files.length,
   });
   pullFiles = async () => this.files;
+  /** What each `base...head` comparison lists; any other is gone. */
+  comparisons = new Map<string, PullFile[]>();
+  compared: string[] = [];
+  compare = async (base: string, head: string) => {
+    this.compared.push(`${base}...${head}`);
+    return this.comparisons.get(`${base}...${head}`) ?? null;
+  };
   recentItems = async (count: number) => this.recent.slice(0, count);
   addLabels = async (_: number, labels: string[]) => {
     this.added.push(...labels);

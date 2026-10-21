@@ -132,6 +132,23 @@ describe("ciPlan", () => {
     });
   });
 
+  it("runs only what's left when rules skip units that already passed", async () => {
+    const { deps, save } = setup();
+    await save(HEAD, [
+      {
+        unit: "linux",
+        threshold: 0.5,
+        run: false,
+        score: null,
+        rule: "passed at this head",
+      },
+      { unit: "macos", threshold: 0.5, run: true, score: null, rule: "x" },
+    ]);
+
+    const reply = await ciPlan(query(), null, deps);
+    expect(reply.body).toMatchObject({ all: false, units: ["macos"] });
+  });
+
   it("waits for a plan without queueing one unless asked to start", async () => {
     const { deps, jobs } = setup();
 

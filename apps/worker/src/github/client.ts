@@ -89,6 +89,8 @@ const Pull = v.object({
 
 export type Pull = v.InferOutput<typeof Pull>;
 
+const Comparison = v.object({ files: v.optional(v.array(File), []) });
+
 const Repository = v.object({
   id: v.number(),
   full_name: v.string(),
@@ -143,6 +145,11 @@ export interface RepoApi {
   pull(number: number): Promise<Pull>;
   /** A pull request's changed files, up to the first thousand. */
   pullFiles(number: number): Promise<PullFile[]>;
+  /**
+   * The files `head` changes since its merge base with `base`, up to the
+   * first 300, or null if either commit is gone.
+   */
+  compare(base: string, head: string): Promise<PullFile[] | null>;
   addLabels(number: number, labels: string[]): Promise<void>;
   /** A GitHub Actions workflow run, or null if the repository has none. */
   workflowRun(runId: number): Promise<WorkflowRun | null>;
@@ -346,6 +353,17 @@ class RepoClient implements RepoApi {
       `/repos/${this.fullName}/pulls/${number}/files`,
       MAX_FILE_PAGES,
     );
+  }
+
+  async compare(base: string, head: string): Promise<PullFile[] | null> {
+    // Three dots diff from the merge base, as a pull request's files do.
+    const path = `/repos/${this.fullName}/compare/${base}...${head}`;
+    const response = await this.send("GET", path);
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new GitHubError(response.status, path, await response.text());
+    }
+    return v.parse(Comparison, await response.json()).files;
   }
 
   async addLabels(number: number, labels: string[]): Promise<void> {

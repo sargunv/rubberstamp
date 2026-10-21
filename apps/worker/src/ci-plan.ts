@@ -42,7 +42,7 @@ export type PlanQuery = v.InferOutput<typeof PlanQuery>;
 
 export type PlanReady = {
   status: "ready";
-  /** Whether every unit runs because one rule decided them all. */
+  /** Whether every unit runs because rules decided them all without scores. */
   all: boolean;
   /** The ids of the units that run. */
   units: string[];
@@ -206,7 +206,8 @@ export async function ciPlan(
   const plan = await deps.store.findPlan(key);
   if (plan !== null) {
     const { decisions } = plan;
-    const all = decisions.every((d) => d.score === null);
+    // A unit that passed already is decided without a score but doesn't run.
+    const all = decisions.every((d) => d.run && d.score === null);
     const units = decisions.filter((d) => d.run).map((d) => d.unit);
     await record(all ? configured : units, plan.base);
     return {

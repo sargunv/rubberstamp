@@ -6,7 +6,7 @@ import { SegmentedControl } from "../ui/segmented.tsx";
 import { ItemKindIcon } from "./item-state.tsx";
 import { LabelDiff } from "./label.tsx";
 import { LabelScores, Ledger, LedgerRow } from "./ledger.tsx";
-import { PlanSummary, scored, UnitChip, UnitScores } from "./plan.tsx";
+import { PlanSummary, ruled, UnitChip, UnitScores } from "./plan.tsx";
 
 const when = new Intl.DateTimeFormat("en", {
   month: "short",
@@ -92,7 +92,7 @@ function ActivityRow({
     />
   ) : null;
   const unitScores =
-    plan && scored(plan) ? <UnitScores decisions={plan.decisions} /> : null;
+    plan && !ruled(plan) ? <UnitScores decisions={plan.decisions} /> : null;
   return (
     <LedgerRow
       number={item.number}

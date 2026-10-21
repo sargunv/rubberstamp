@@ -124,7 +124,8 @@ report() {
     | (if .score == null then null else (.score * 100 | round) / 100 end) as $score
     | [
         (if .rule != "" then .rule else empty end),
-        (if $score == null then empty else "score \($score), threshold \(.threshold)" end)
+        (if $score == null then empty else "score \($score), threshold \(.threshold)" end),
+        (if $score == null or (.since | type) != "string" then empty else "since \(.since[0:7])" end)
       ] as $why
     | "| `\(.unit)` | \(if .run then "run" else "skip" end) | \($why | join("; ") | gsub("\\|"; "\\|")) |"
   ' "$response" >> "$summary_file" 2> /dev/null

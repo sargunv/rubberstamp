@@ -1,6 +1,7 @@
 import {
   ciConfigHash,
   parseConfig,
+  type PullFile,
   type Request,
   type Response,
 } from "@sargunv/rubberstamp-core";
@@ -298,5 +299,269 @@ describe("runPlanJob", () => {
     expect(requests).toHaveLength(1);
     expect(store.plans[0]).toMatchObject({ inputTokens: 1000 });
     expect(store.plans[0]?.decisions[0]?.rule).toBe("monthly budget spent");
+  });
+});
+
+describe("runPlanJob since a unit last passed", () => {
+  const SINCE = CONFIG.replace(
+    "ci:\n",
+    "ci:\n  workflow: .github/workflows/ci.yml\n",
+  );
+  const OLD = "0ld0ld0ld0ld";
+  const OLD_BASE = "oldbase";
+
+  const file = (filename: string, patch: string): PullFile => ({
+    filename,
+    status: "modified",
+    additions: 1,
+    deletions: 1,
+    patch,
+  });
+  const APPLE = file("src/platform/apple/map.mm", "@@ -1 +1 @@\n-x\n+y");
+  const MAP = file("src/map.cpp", "@@ -1 +1 @@\n-a\n+b");
+
+  /** A pull request now changing `files`, whose units passed at `head`. */
+  function setup(
+    files: PullFile[],
+    passed: { unit: string; head: string; base: string }[],
+  ) {
+    const repo = new FakeRepo(SINCE, pull);
+    repo.files = files;
+    const store = new FakeStore();
+    for (const pass of passed) {
+      store.passes.push({
+        ...pass,
+        repoId: 2,
+        number: 3,
+        runId: 1,
+        at: "2026-10-20T00:00:00Z",
+      });
+    }
+    const requests: Request[] = [];
+    return {
+      repo,
+      store,
+      requests,
+      run: () => runPlanJob(job, deps(repo, store, { ask: jev(requests) })),
+    };
+  }
+
+  const both = (head: string, base: string) => [
+    { unit: "linux-x64", head, base },
+    { unit: "macos", head, base },
+  ];
+
+  it("judges from the merge base when no unit has passed", async () => {
+    const { repo, requests, run } = setup([MAP], []);
+    expect(await run()).toEqual({
+      status: "planned",
+      decisions: [
+        { unit: "linux-x64", threshold: 0.5, run: true, score: 0.9, rule: "" },
+        { unit: "macos", threshold: 0.5, run: false, score: 0.2, rule: "" },
+      ],
+    });
+    expect(repo.compared).toEqual([]);
+    expect(requests[0]?.state).not.toHaveProperty("change.scope");
+  });
+
+  it("ignores passes without the workflow that records them", async () => {
+    const { repo, requests, run } = setup([MAP], both("abc123", "base123"));
+    repo.config = async () => ({
+      path: ".config/rubberstamp.yml",
+      source: CONFIG,
+    });
+    expect(await run()).toMatchObject({
+      decisions: [{ score: 0.9 }, { score: 0.2 }],
+    });
+    expect(requests).toHaveLength(1);
+  });
+
+  it("doesn't run a unit that passed at this head and base", async () => {
+    const { store, requests, run } = setup(
+      [MAP],
+      [{ unit: "linux-x64", head: "abc123", base: "base123" }],
+    );
+    expect(await run()).toEqual({
+      status: "planned",
+      decisions: [
+        {
+          unit: "linux-x64",
+          threshold: 0.5,
+          run: false,
+          score: null,
+          rule: "passed at this head",
+        },
+        { unit: "macos", threshold: 0.5, run: false, score: 0.2, rule: "" },
+      ],
+    });
+    // Only the unit left is asked about, on the whole change.
+    expect(Object.keys(requests[0]?.questions ?? {})).toEqual(["unit:macos"]);
+    expect(store.plans[0]).toMatchObject({ inputTokens: 1000 });
+  });
+
+  it("asks nothing when every unit passed at this head", async () => {
+    const { store, requests, run } = setup([MAP], both("abc123", "base123"));
+    expect(await run()).toMatchObject({
+      decisions: [
+        { run: false, rule: "passed at this head" },
+        { run: false, rule: "passed at this head" },
+      ],
+    });
+    expect(requests).toEqual([]);
+    expect(store.plans[0]).toMatchObject({ model: null, inputTokens: 0 });
+  });
+
+  it("finds no changes after a rebase that only moved the patch", async () => {
+    const { repo, requests, run } = setup([MAP], both(OLD, OLD_BASE));
+    repo.comparisons.set(`${OLD_BASE}...${OLD}`, [
+      file("src/map.cpp", "@@ -40,3 +40,3 @@ int main() {\n ctx\n-a\n+b\n ctx"),
+    ]);
+    expect(await run()).toMatchObject({
+      decisions: [
+        {
+          run: false,
+          score: null,
+          rule: "no changes since 0ld0ld0",
+          since: OLD,
+        },
+        {
+          run: false,
+          score: null,
+          rule: "no changes since 0ld0ld0",
+          since: OLD,
+        },
+      ],
+    });
+    expect(repo.compared).toEqual([`${OLD_BASE}...${OLD}`]);
+    expect(requests).toEqual([]);
+  });
+
+  it("judges only the files edited since the pass", async () => {
+    const edited = file("src/map.cpp", "@@ -1 +1 @@\n-a\n+c");
+    const { repo, requests, run } = setup([APPLE, edited], both(OLD, OLD_BASE));
+    repo.comparisons.set(`${OLD_BASE}...${OLD}`, [APPLE, MAP]);
+    expect(await run()).toEqual({
+      status: "planned",
+      decisions: [
+        {
+          unit: "linux-x64",
+          threshold: 0.5,
+          run: true,
+          score: 0.9,
+          rule: "",
+          since: OLD,
+        },
+        // The Apple file didn't change since, so its path forces nothing.
+        {
+          unit: "macos",
+          threshold: 0.5,
+          run: false,
+          score: 0.2,
+          rule: "",
+          since: OLD,
+        },
+      ],
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.state).toMatchObject({
+      change: {
+        scope: expect.stringContaining("commit 0ld0ld0"),
+        files: ["M src/map.cpp (+1 -1)"],
+      },
+    });
+    expect(JSON.stringify(requests[0]?.state)).not.toContain("apple");
+  });
+
+  it("judges each pass's units on their own changes", async () => {
+    const { repo, requests, run } = setup(
+      [MAP],
+      [{ unit: "linux-x64", head: OLD, base: OLD_BASE }],
+    );
+    repo.comparisons.set(`${OLD_BASE}...${OLD}`, []);
+    const outcome = await run();
+    expect(outcome).toMatchObject({
+      decisions: [{ score: 0.9, since: OLD }, { score: 0.2 }],
+    });
+    expect(
+      outcome.status === "planned" && outcome.decisions[1],
+    ).not.toHaveProperty("since");
+    expect(requests.map((r) => Object.keys(r.questions))).toEqual([
+      ["unit:macos"],
+      ["unit:linux-x64"],
+    ]);
+  });
+
+  it.each<[string, (repo: FakeRepo) => void]>([
+    [
+      "lists too many files to trust",
+      (repo) => {
+        repo.comparisons.set(
+          `${OLD_BASE}...${OLD}`,
+          Array.from({ length: 300 }, (_, i) => file(`src/${i}.cpp`, "+x")),
+        );
+      },
+    ],
+    [
+      "has a file without a patch",
+      (repo) => {
+        repo.comparisons.set(`${OLD_BASE}...${OLD}`, [
+          MAP,
+          { ...file("logo.png", ""), patch: undefined },
+        ]);
+      },
+    ],
+    ["can't find the old head", () => {}],
+    [
+      "fails",
+      (repo) => {
+        repo.compare = async () => {
+          throw new Error("GitHub 500");
+        };
+      },
+    ],
+  ])("judges from the merge base when the compare %s", async (_, breakIt) => {
+    const { repo, requests, run } = setup([MAP], both(OLD, OLD_BASE));
+    breakIt(repo);
+    expect(await run()).toEqual({
+      status: "planned",
+      decisions: [
+        { unit: "linux-x64", threshold: 0.5, run: true, score: 0.9, rule: "" },
+        { unit: "macos", threshold: 0.5, run: false, score: 0.2, rule: "" },
+      ],
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.state).not.toHaveProperty("change.scope");
+  });
+
+  it("judges from the merge base when the pull request lists too few files", async () => {
+    const { repo, run } = setup([MAP], both(OLD, OLD_BASE));
+    repo.comparisons.set(`${OLD_BASE}...${OLD}`, [MAP]);
+    const { pull: real } = repo;
+    repo.pull = async () => ({ ...(await real()), changed_files: 4000 });
+    expect(await run()).toMatchObject({
+      decisions: [
+        { run: true, rule: "too large to judge" },
+        { run: true, rule: "too large to judge" },
+      ],
+    });
+    expect(repo.compared).toEqual([]);
+  });
+
+  it("shows a file the pull request no longer changes as reverted", async () => {
+    const { repo, requests, run } = setup([MAP], both(OLD, OLD_BASE));
+    repo.comparisons.set(`${OLD_BASE}...${OLD}`, [MAP, APPLE]);
+    expect(await run()).toMatchObject({
+      decisions: [
+        { score: 0.9, since: OLD },
+        { run: true, rule: "matches src/platform/apple/*", since: OLD },
+      ],
+    });
+    expect(requests[0]?.state).toMatchObject({
+      change: {
+        files: [
+          "src/platform/apple/map.mm (reverted: the pull request no longer changes it)",
+        ],
+      },
+    });
   });
 });
