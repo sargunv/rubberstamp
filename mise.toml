@@ -8,8 +8,9 @@ lockfile = true
 "aqua:dprint/dprint" = "0.63.0"
 "aqua:jdx/hk" = "2.7.0"
 "aqua:pnpm/pnpm" = "12.14.0"
-"github:rwx-cloud/rwx" = "3.36.1"
 "core:node" = "24.22.0"
+"github:jdx/fnox" = "1.40.0"
+"github:rwx-cloud/rwx" = "3.36.1"
 
 [deps.pnpm]
 auto = true
@@ -42,3 +43,12 @@ run = "pnpm exec wrangler types"
 description = "Run the Worker locally against local D1, R2, and Queues."
 dir = "apps/worker"
 run = "pnpm exec wrangler d1 migrations apply rubberstamp --local && pnpm exec wrangler dev"
+
+[tasks."worker:secrets"]
+description = "Upload the Worker's secrets from fnox to Cloudflare."
+dir = "apps/worker"
+run = '''
+for name in GITHUB_PRIVATE_KEY GITHUB_WEBHOOK_SECRET TYPESAFE_API_KEY; do
+  fnox get "$name" | pnpm exec wrangler secret put "$name"
+done
+'''

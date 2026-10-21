@@ -1,0 +1,12 @@
+# :schema https://fnox.jdx.dev/schema.json
+
+default_provider = "age"
+
+[providers.age]
+type = "age"
+recipients = [
+  "age1uzca57akdzmyhyzxecxnt92fcwj652n9h6xhfkfzhqg4k4ljnuqstsdmap", # sargunv
+]
+
+[secrets]
+GITHUB_WEBHOOK_SECRET = { provider = "age", value = "YWdlLWVuY3J5cHRpb24ub3JnL3YxCi0+IFgyNTUxOSBPQzZWRVhlVlpiRTV3UzkvZm5zdldLdUhjcHVZSUFQS2JoMlY3YmQwRlZjCkZkZ0VWOVlSMHBGKzJPM3pRZ3pKQkQxdnFWYk02dnhxR09YaWhFK1EyNFEKLT4gKSYtZ3JlYXNlIEhiNnE9dSBzTDA5ISBiZGUqXiBIZShwRApWSEVLaGlxbEV5SlJWWWcybFhoV21qU0tPaTAwS0xrTyt0blJCNkhkdW51VTFGOVN5M2cKLS0tIFUvKzNZWUQzd25qUWNzSUZBMStxaHNqVVI2RVJQVXFBdlVHbmtTZnFITlkKAvRT90dkJuqTa8tW0i+tX0wDtEgQ/Y0Vf8+/CUhxB2OWcoMCkflUkViGR67qtGbzD8R42p3Zlduz8NPrJ3cRzRhErcrSHPgd9cf+8cEJLiXjUpRS2ts6080hVdeYPwUg", description = "Signs GitHub App webhook deliveries" }

@@ -22,8 +22,16 @@ docs/design.md  the product design and the decisions behind it
 - `mise run fix`: apply formatters and auto-fixable lint.
 - `mise run worker:dev`: run the Worker locally against local D1, R2, and
   Queues. Put secrets in `apps/worker/.dev.vars` (gitignored).
+- `mise run worker:secrets`: upload the Worker's secrets from fnox to
+  Cloudflare.
 - `mise run worker:types`: regenerate binding types after editing
   `apps/worker/wrangler.jsonc`.
+
+## Secrets
+
+Secrets live age-encrypted in `fnox.toml`. Read one with `fnox get NAME`, and
+add or replace one with `fnox set NAME` (it reads stdin or prompts). Never print
+a secret's value.
 
 ## Project invariants
 
