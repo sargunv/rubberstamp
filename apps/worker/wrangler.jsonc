@@ -17,7 +17,11 @@
     // Jev input tokens per UTC month, for labeling and previews alike. Jev
     // costs $0.042 per million input tokens, so 24M is about $1. Accounts
     // override the per-installation budget.
-    "BUDGETS": { "installation": 24000000, "global": 240000000, "accounts": {} }
+    "BUDGETS": {
+      "installation": 25000000,
+      "global": 240000000,
+      "accounts": { "maplibre": 100000000 }
+    }
   },
   "d1_databases": [
     {
