@@ -2,6 +2,7 @@ export * from "./api.ts";
 export * from "./ci.ts";
 export * from "./config.ts";
 export * from "./describe.ts";
+export * from "./generated.ts";
 export * from "./hash.ts";
 export * from "./jev.ts";
 export * from "./labeling.ts";

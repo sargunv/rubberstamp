@@ -7,6 +7,8 @@ import {
   contextText,
   fileList,
   filePatch,
+  isGenerated,
+  type Detail,
   REVERTED,
   squash,
   type PullFile,
@@ -26,8 +28,17 @@ export const DEFAULT_CI_THRESHOLD = 0.5;
 // diffs average well above three characters per token, so this leaves headroom.
 const STATE_BUDGET = 84_000;
 // A larger change runs every unit: judging it costs many requests, and
-// reviewers expect broad coverage for it anyway.
+// reviewers expect broad coverage for it anyway. Only the files written by hand
+// count toward it, and generated files fill whatever room they leave.
 const MAX_CHUNKS = 8;
+// Each level describes less of a change, and a change takes the first that
+// fits in `MAX_CHUNKS`: all of it, then one unchanged line around each change,
+// then generated files only counted in the file list.
+const DETAILS: Detail[] = [
+  {},
+  { context: 1 },
+  { context: 1, generated: "count" },
+];
 
 /** A configured unit, with its threshold resolved. */
 export type Unit = {
@@ -128,8 +139,45 @@ export function unitQuestions(units: Unit[]): Record<string, Question> {
 }
 
 /**
- * One request per chunk of the patch, each with the whole file list, or null
- * when the change is too large to judge.
+ * The patch in chunks of at most `budget` characters: the files written by
+ * hand, then as many generated files as fit in `MAX_CHUNKS`. Null when the
+ * hand-written files alone need more.
+ */
+function packPatch(
+  files: PullFile[],
+  budget: number,
+  detail: Detail,
+): string[] | null {
+  const judged = files.filter((file) => file.status !== REVERTED);
+  const chunks = chunk(
+    judged
+      .filter((file) => !isGenerated(file))
+      .map((f) => filePatch(f, detail)),
+    budget,
+  );
+  if (chunks.length > MAX_CHUNKS) return null;
+  let omitted = 0;
+  for (const file of judged.filter(isGenerated)) {
+    const text = filePatch(file, detail).slice(0, budget);
+    const last = chunks.length - 1;
+    if ((chunks[last] ?? "").length + text.length <= budget) {
+      chunks[last] = (chunks[last] ?? "") + text;
+    } else if (chunks.length < MAX_CHUNKS) {
+      chunks.push(text);
+    } else {
+      omitted++;
+    }
+  }
+  if (omitted > 0) {
+    chunks[chunks.length - 1] +=
+      `[... the diffs of ${omitted} more generated files are omitted]\n`;
+  }
+  return chunks;
+}
+
+/**
+ * One request per chunk of the patch, each with the whole file list, at the
+ * most detail that fits, or null when the change is too large to judge.
  */
 export function planRequests(
   config: Config,
@@ -138,45 +186,49 @@ export function planRequests(
   model: string,
 ): Request[] | null {
   const context = contextText(config.context, config.ci?.context);
-  const described: { [key: string]: Json } = {
-    title: change.title,
-    body: (change.body ?? "").slice(0, BODY_LIMIT),
-    ...(change.since === undefined
-      ? {}
-      : {
-          scope:
-            "Only the files whose changes differ from the pull request at " +
-            `commit ${change.since.slice(0, 7)}, where this coverage last ` +
-            "passed. The rest of the pull request already passed it.",
-        }),
-    files: fileList(change.files),
-  };
-  const fixed = {
-    ...(context === undefined ? {} : { repository: context }),
-    change: described,
-  };
-  const chunks = chunk(
-    change.files.filter((file) => file.status !== REVERTED).map(filePatch),
-    STATE_BUDGET - JSON.stringify(fixed).length,
-  );
-  if (chunks.length > MAX_CHUNKS) return null;
-  const questions = unitQuestions(units);
-  return chunks.map((patch, index) => ({
-    model,
-    state: {
-      ...fixed,
-      change: {
-        ...described,
-        patch,
-        ...(chunks.length > 1
-          ? {
-              patch_part: `Part ${index + 1} of ${chunks.length} of the patch. The file list covers the whole change.`,
-            }
-          : {}),
+  for (const detail of DETAILS) {
+    const described: { [key: string]: Json } = {
+      title: change.title,
+      body: (change.body ?? "").slice(0, BODY_LIMIT),
+      ...(change.since === undefined
+        ? {}
+        : {
+            scope:
+              "Only the files whose changes differ from the pull request at " +
+              `commit ${change.since.slice(0, 7)}, where this coverage last ` +
+              "passed. The rest of the pull request already passed it.",
+          }),
+      files: fileList(change.files, detail),
+    };
+    const fixed = {
+      ...(context === undefined ? {} : { repository: context }),
+      change: described,
+    };
+    const chunks = packPatch(
+      change.files,
+      STATE_BUDGET - JSON.stringify(fixed).length,
+      detail,
+    );
+    if (chunks === null) continue;
+    const questions = unitQuestions(units);
+    return chunks.map((patch, index) => ({
+      model,
+      state: {
+        ...fixed,
+        change: {
+          ...described,
+          patch,
+          ...(chunks.length > 1
+            ? {
+                patch_part: `Part ${index + 1} of ${chunks.length} of the patch. The file list covers the whole change.`,
+              }
+            : {}),
+        },
       },
-    },
-    questions,
-  }));
+      questions,
+    }));
+  }
+  return null;
 }
 
 /**
