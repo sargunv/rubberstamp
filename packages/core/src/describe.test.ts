@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { chunk, describeItem, filePatch, fileList } from "./describe.ts";
+import {
+  chunk,
+  describeItem,
+  filePatch,
+  fileList,
+  narrowContext,
+} from "./describe.ts";
 import { canonicalJson, hashJson } from "./hash.ts";
 
 describe("filePatch", () => {
@@ -102,5 +108,96 @@ describe("hashJson", () => {
       '{"a":[true,null],"b":1}',
     );
     expect(await hashJson({ a: 1, b: 2 })).toBe(await hashJson({ b: 2, a: 1 }));
+  });
+});
+
+describe("generated files", () => {
+  const file = (filename: string, generated?: boolean) => ({
+    filename,
+    status: "modified",
+    additions: 1,
+    deletions: 1,
+    patch: "+x\n".repeat(5000),
+    ...(generated === undefined ? {} : { generated }),
+  });
+
+  it("lists and diffs them after the files written by hand", () => {
+    const files = [file("src/api.g.cs", true), file("src/a.ts")];
+    expect(fileList(files)).toEqual([
+      "M src/a.ts (+1 -1)",
+      "M src/api.g.cs (+1 -1, generated)",
+    ]);
+    const patch = JSON.stringify(
+      describeItem({ type: "pull request", title: "t", body: null, files })[
+        "patch"
+      ],
+    );
+    expect(patch.indexOf("src/a.ts")).toBeLessThan(
+      patch.indexOf("src/api.g.cs"),
+    );
+  });
+
+  it("shows only the start of each one", () => {
+    const patch = filePatch(file("src/api.g.cs", true));
+    expect(patch).toContain("generated file\n");
+    expect(patch.length).toBeLessThan(3_200);
+  });
+});
+
+describe("narrowContext", () => {
+  it("keeps the context around each change and splits hunks between", () => {
+    const patch = [
+      "@@ -10,8 +10,8 @@ function camera() {",
+      " a",
+      " b",
+      "-c",
+      "+C",
+      " d",
+      " e",
+      " f",
+      " g",
+      "-h",
+      "+H",
+      "\\ No newline at end of file",
+    ].join("\n");
+    expect(narrowContext(patch, 1)).toBe(
+      [
+        "@@ -11,3 +11,3 @@ function camera() {",
+        " b",
+        "-c",
+        "+C",
+        " d",
+        "@@ -16,2 +16,2 @@",
+        " g",
+        "-h",
+        "+H",
+        "\\ No newline at end of file",
+      ].join("\n"),
+    );
+    expect(narrowContext(patch, 3)).toBe(patch);
+  });
+
+  it("leaves a patch without hunks alone", () => {
+    expect(narrowContext("+x\n+y", 1)).toBe("+x\n+y");
+  });
+});
+
+describe("fileList with generated files counted", () => {
+  it("lists the files written by hand and counts the rest", () => {
+    const file = (filename: string, generated: boolean) => ({
+      filename,
+      status: "modified",
+      additions: 2,
+      deletions: 1,
+      generated,
+    });
+    expect(
+      fileList(
+        [file("a.g.cs", true), file("a.ts", false), file("b.g.cs", true)],
+        {
+          generated: "count",
+        },
+      ),
+    ).toEqual(["M a.ts (+2 -1)", "... and 2 generated files (+4 -2)"]);
   });
 });

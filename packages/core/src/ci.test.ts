@@ -99,6 +99,52 @@ describe("planRequests", () => {
     );
     expect(planRequests(config(), units, change(big(40)), "m")).toBeNull();
   });
+
+  it("narrows the context of a change too large to show whole", () => {
+    const units = ciUnits(config());
+    // Each hunk is one change in 3,000 unchanged lines.
+    const files = Array.from({ length: 100 }, (_, i) => ({
+      ...FILE,
+      filename: `src/${i}.cpp`,
+      patch: `@@ -1,3001 +1,3001 @@\n-a\n+b\n${" x\n".repeat(3_000)}`,
+    }));
+    const requests = planRequests(config(), units, change(files), "m") ?? [];
+    expect(requests.length).toBe(1);
+    expect(JSON.stringify(requests[0]?.state)).toContain("@@ -1,2 +1,2 @@");
+  });
+
+  it("judges a change by its own files, fitting what generated files it can", () => {
+    const units = ciUnits(config());
+    const files = (n: number, generated: boolean) =>
+      Array.from({ length: n }, (_, i) => ({
+        ...FILE,
+        filename: `${generated ? "gen" : "src"}/${i}.cpp`,
+        patch: "+x\n".repeat(7_000),
+        generated,
+      }));
+    const requests =
+      planRequests(
+        config(),
+        units,
+        change([...files(400, true), ...files(4, false)]),
+        "m",
+      ) ?? [];
+    expect(requests.length).toBe(8);
+    const patches = requests.map((r) => JSON.stringify(r.state));
+    expect(patches[0]).toContain("src/0.cpp");
+    expect(patches[0]).not.toContain("diff --git a/gen/");
+    expect(patches.at(-1)).toMatch(
+      /the diffs of \d+ more generated files are omitted/,
+    );
+    expect(
+      planRequests(
+        config(),
+        units,
+        change([...files(1, true), ...files(40, false)]),
+        "m",
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("decideUnits", () => {

@@ -68,8 +68,7 @@ them itself from `.config/rubberstamp.yml`, so don't label by hand.
 ## Project invariants
 
 - Configuration lives in each repository at `.config/rubberstamp.yml` and is
-  read from the default branch only. A pull request can never change how it is
-  judged.
+  read from the default branch only.
 - Rubberstamp builds every Jev state and question itself from GitHub data and
   that configuration. Nothing a caller sends becomes a question.
 - Decision logic in `packages/core` stays pure and runtime-agnostic so the web

@@ -1,4 +1,10 @@
-import { CONFIG_PATH, type PullFile } from "@sargunv/rubberstamp-core";
+import {
+  attributeDirs,
+  CONFIG_PATH,
+  markGenerated,
+  type Attributes,
+  type PullFile,
+} from "@sargunv/rubberstamp-core";
 import * as v from "valibot";
 
 import { appJwt } from "./auth.ts";
@@ -182,6 +188,10 @@ const PAGE = 100;
 // Labels read only the first part of a diff, and CI plans every unit for a
 // change this large, so a thousand files is plenty.
 const MAX_FILE_PAGES = 10;
+// Directories whose `.gitattributes` one GraphQL query reads.
+const ATTRIBUTE_BATCH = 100;
+
+const Blob = v.nullable(v.object({ text: v.optional(v.nullable(v.string())) }));
 
 export class GitHubApp {
   private readonly tokens = new Map<
@@ -364,12 +374,54 @@ class RepoClient implements RepoApi {
     return this.json(Pull, "GET", `/repos/${this.fullName}/pulls/${number}`);
   }
 
-  pullFiles(number: number): Promise<PullFile[]> {
-    return this.pages(
+  async pullFiles(number: number): Promise<PullFile[]> {
+    const files = await this.pages(
       File,
       `/repos/${this.fullName}/pulls/${number}/files`,
       MAX_FILE_PAGES,
     );
+    try {
+      const paths = files.map((file) => file.filename);
+      return markGenerated(
+        files,
+        await this.attributes(`refs/pull/${number}/head`, attributeDirs(paths)),
+      );
+    } catch (error) {
+      // Marking only orders the diff, so without it every file counts as
+      // written by hand.
+      console.error(`${this.fullName}#${number} attributes failed`, error);
+      return files;
+    }
+  }
+
+  /** The `.gitattributes` files that exist in these directories at `ref`. */
+  private async attributes(ref: string, dirs: string[]): Promise<Attributes[]> {
+    const [owner, name] = this.fullName.split("/");
+    const found: Attributes[] = [];
+    for (let start = 0; start < dirs.length; start += ATTRIBUTE_BATCH) {
+      const batch = dirs.slice(start, start + ATTRIBUTE_BATCH);
+      const fields = batch.map((dir, i) => {
+        const path = dir === "" ? ".gitattributes" : `${dir}/.gitattributes`;
+        const expression = JSON.stringify(`${ref}:${path}`);
+        return `d${i}: object(expression: ${expression}) { ... on Blob { text } }`;
+      });
+      const { data } = await this.json(
+        v.object({
+          data: v.object({ repository: v.record(v.string(), Blob) }),
+        }),
+        "POST",
+        "/graphql",
+        {
+          query: `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields.join(" ")} } }`,
+          variables: { owner, name },
+        },
+      );
+      batch.forEach((dir, i) => {
+        const source = data.repository[`d${i}`]?.text;
+        if (source) found.push({ dir, source });
+      });
+    }
+    return found;
   }
 
   async compare(base: string, head: string): Promise<Comparison | null> {
