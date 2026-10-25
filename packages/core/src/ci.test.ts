@@ -26,7 +26,7 @@ ci:
       covers: Linux x64 with every binding's tests.
     macos:
       covers: macOS with Metal.
-      rules: [{ if: { files: [src/platform/apple/*] }, then: apply }]
+      rules: [{ if: { files: [src/platform/apple/**] }, then: apply }]
       threshold: 0.3
 `;
 
@@ -141,7 +141,7 @@ ci:
   units:
     docs:
       covers: The docs site.
-      rules: [{ unless: { ask: Does this change the docs?, threshold: 0.4 }, then: skip }]
+      rules: [{ unless: { ask: { question: Does this change the docs?, threshold: 0.4 } }, then: skip }]
 `),
     );
     const [request] = planRequests(config(), gated, change([FILE]), "m") ?? [];
@@ -174,26 +174,34 @@ ci:
     ).toBe(true);
   });
 
-  it("doesn't ask about a unit that its rules always decide", () => {
+  it("decides a unit by its otherwise when no rule matches", () => {
     const decided = ciUnits(
       config(`
 version: 1
 ci:
   units:
-    docs: { covers: Docs, rules: [{ if: { files: [docs/*] }, then: apply }, { then: skip }] }
+    docs: { covers: Docs, rules: [{ if: { files: [docs/**] }, then: apply }], otherwise: skip }
     linux: { covers: Linux }
 `),
     );
-    const [request] =
-      planRequests(config(), decided, change([FILE]), "m") ?? [];
-    expect(Object.keys(request?.questions ?? {})).toEqual(["unit:linux"]);
-    const scores = unitScores(decided, [
-      { "unit:linux": { type: "noul", noul: 0.7 } },
-    ]);
-    expect(decideUnits(decided, scores ?? {}, {}, ["src/map.cpp"])).toEqual([
-      { unit: "docs", threshold: 0.5, run: false, score: null, rule: "rule 2" },
+    expect(
+      decideUnits(decided, { docs: 0.9, linux: 0.7 }, {}, ["src/map.cpp"]),
+    ).toEqual([
+      {
+        unit: "docs",
+        threshold: 0.5,
+        run: false,
+        score: 0.9,
+        rule: "otherwise: skip",
+      },
       { unit: "linux", threshold: 0.5, run: true, score: 0.7, rule: "" },
     ]);
+    expect(
+      decideUnits(decided, { docs: 0.1, linux: 0.7 }, {}, ["docs/a/b.md"])[0],
+    ).toMatchObject({
+      run: true,
+      rule: "rule 1, matching docs/**",
+    });
   });
 
   it("applies a unit whose rule matches a changed file, renames included", () => {
@@ -210,7 +218,7 @@ ci:
       threshold: 0.3,
       run: true,
       score: 0.05,
-      rule: "rule 1, matching src/platform/apple/*",
+      rule: "rule 1, matching src/platform/apple/**",
     });
   });
 

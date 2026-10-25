@@ -54,7 +54,7 @@ export function changeCount(diff: LabelChange[]) {
 /** How many labels a group takes, in words. */
 export function requirement(group: Group): string {
   const count = cardinality(group);
-  return group.over === "none" ? `${count}, or none if more pass` : count;
+  return group.overflow === "drop" ? `${count}, or none if more pass` : count;
 }
 
 function cardinality(group: Group): string {

@@ -1,14 +1,15 @@
-import { glob } from "./glob.ts";
+import { pathGlob } from "./glob.ts";
 import type { Answer, Question } from "./jev.ts";
 
 export type Kind = "issue" | "pr";
 
 /** Holds when every key it sets holds. */
 export type Condition = {
-  kind?: Kind | undefined;
+  is?: Kind | undefined;
   files?: string[] | undefined;
-  ask?: string | undefined;
-  threshold?: number | undefined;
+  ask?: { question: string; threshold?: number | undefined } | undefined;
+  /** `true` for the target's own threshold, or a threshold of its own. */
+  fits?: true | number | undefined;
 };
 
 export type Rule = {
@@ -17,30 +18,28 @@ export type Rule = {
   then: "apply" | "skip";
 };
 
+/** What decides a label or unit when none of its rules match. */
+export type Otherwise = "fits" | "apply" | "skip";
+
 /** What rules are judged on. An issue has no paths. */
 export type Facts = {
-  kind: Kind;
+  is: Kind;
   paths: string[];
   /** Jev's probability for each asked question, keyed by its text. */
   asks: Record<string, number>;
 };
 
-export const DEFAULT_ASK_THRESHOLD = 0.5;
+/** The label or unit being decided: its built-in question's score and bar. */
+export type Target = { score: number; threshold: number };
 
-/**
- * Whether the rules decide every item, because one has no condition. A score
- * they'd override isn't worth asking for.
- */
-export function alwaysDecides(rules: Rule[]): boolean {
-  return rules.some(
-    (rule) => rule.if === undefined && rule.unless === undefined,
-  );
-}
+export const DEFAULT_ASK_THRESHOLD = 0.5;
 
 /** The questions the rules ask, each once, in the order they first appear. */
 export function ruleAsks(rules: Rule[]): string[] {
   const asks = rules.flatMap((rule) =>
-    [rule.if?.ask, rule.unless?.ask].filter((ask) => ask !== undefined),
+    [rule.if?.ask?.question, rule.unless?.ask?.question].filter(
+      (ask) => ask !== undefined,
+    ),
   );
   return [...new Set(asks)];
 }
@@ -90,62 +89,90 @@ export function askScores(
 function check(
   condition: Condition,
   facts: Facts,
+  target: Target,
 ): { holds: boolean; matched?: string } {
-  if (condition.kind !== undefined && condition.kind !== facts.kind) {
+  if (condition.is !== undefined && condition.is !== facts.is) {
     return { holds: false };
   }
   if (condition.ask !== undefined) {
-    const threshold = condition.threshold ?? DEFAULT_ASK_THRESHOLD;
-    if ((facts.asks[condition.ask] ?? 0) < threshold) return { holds: false };
+    const { question, threshold = DEFAULT_ASK_THRESHOLD } = condition.ask;
+    if ((facts.asks[question] ?? 0) < threshold) return { holds: false };
+  }
+  if (condition.fits !== undefined) {
+    const threshold =
+      condition.fits === true ? target.threshold : condition.fits;
+    if (target.score < threshold) return { holds: false };
   }
   if (condition.files === undefined) return { holds: true };
   const matched = condition.files.find((pattern) =>
-    facts.paths.some(glob(pattern)),
+    facts.paths.some(pathGlob(pattern)),
   );
   return matched === undefined ? { holds: false } : { holds: true, matched };
 }
 
-export type Verdict = { then: Rule["then"]; why: string };
+/**
+ * How a label or unit came out: applied or skipped by a rule or `otherwise`,
+ * or passed or failed its built-in question when `otherwise` is `fits`.
+ */
+export type Verdict = {
+  outcome: "apply" | "skip" | "pass" | "fail";
+  /** The rule or `otherwise` that decided, or "" when the score did. */
+  why: string;
+};
 
 /**
- * The first rule whose `if` holds and whose `unless` doesn't, or undefined
- * when none does. `name` labels each rule by its position in the list.
+ * Check the rules in order: the first whose `if` holds and whose `unless`
+ * doesn't decides. When none does, `otherwise` decides. `name` labels each
+ * rule by its position in the list.
  */
-export function firstRule(
+export function decide(
   rules: Rule[],
+  otherwise: Otherwise,
   facts: Facts,
+  target: Target,
   name: (index: number) => string,
-): Verdict | undefined {
+): Verdict {
   for (const [index, rule] of rules.entries()) {
     const when =
-      rule.if === undefined ? { holds: true } : check(rule.if, facts);
+      rule.if === undefined ? { holds: true } : check(rule.if, facts, target);
     if (!when.holds) continue;
-    if (rule.unless !== undefined && check(rule.unless, facts).holds) continue;
+    if (rule.unless !== undefined && check(rule.unless, facts, target).holds) {
+      continue;
+    }
     const why = name(index);
     return {
-      then: rule.then,
+      outcome: rule.then,
       why:
         when.matched === undefined ? why : `${why}, matching ${when.matched}`,
     };
   }
-  return undefined;
+  if (otherwise !== "fits") {
+    return { outcome: otherwise, why: `otherwise: ${otherwise}` };
+  }
+  return {
+    outcome: target.score >= target.threshold ? "pass" : "fail",
+    why: "",
+  };
 }
 
 function conditionText(condition: Condition): string {
   const parts: string[] = [];
-  if (condition.kind !== undefined) {
-    parts.push(
-      condition.kind === "pr" ? "it's a pull request" : "it's an issue",
-    );
+  if (condition.is !== undefined) {
+    parts.push(condition.is === "pr" ? "it's a pull request" : "it's an issue");
   }
   if (condition.files !== undefined) {
     parts.push(`a changed file matches ${condition.files.join(", ")}`);
   }
-  if (condition.ask !== undefined) {
-    const threshold = condition.threshold ?? DEFAULT_ASK_THRESHOLD;
+  if (condition.fits !== undefined) {
     parts.push(
-      `Jev answers yes (${threshold.toFixed(2)}) to “${condition.ask}”`,
+      condition.fits === true
+        ? "it fits"
+        : `it fits at ${condition.fits.toFixed(2)}`,
     );
+  }
+  if (condition.ask !== undefined) {
+    const { question, threshold = DEFAULT_ASK_THRESHOLD } = condition.ask;
+    parts.push(`Jev answers yes (${threshold.toFixed(2)}) to “${question}”`);
   }
   return parts.join(" and ");
 }

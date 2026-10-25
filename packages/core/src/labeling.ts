@@ -34,7 +34,7 @@ export function labelFacts(
 ): Facts {
   const asks = labelAsks(groups);
   return {
-    kind: item.type === "issue" ? "issue" : "pr",
+    is: item.type === "issue" ? "issue" : "pr",
     paths: item.type === "issue" ? [] : changedPaths(item.files),
     asks: Object.fromEntries(
       asks.map((ask) => {

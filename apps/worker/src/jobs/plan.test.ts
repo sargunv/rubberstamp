@@ -113,7 +113,7 @@ describe("runPlanJob", () => {
     expect(outcome.status === "planned" && outcome.decisions[1]).toMatchObject({
       unit: "macos",
       run: true,
-      rule: "rule 1, matching src/platform/apple/*",
+      rule: "rule 1, matching src/platform/apple/**",
     });
   });
 
@@ -685,7 +685,7 @@ describe("runPlanJob since a unit last passed", () => {
         { score: 0.9, since: OLD },
         {
           run: true,
-          rule: "rule 1, matching src/platform/apple/*",
+          rule: "rule 1, matching src/platform/apple/**",
           since: OLD,
         },
       ],

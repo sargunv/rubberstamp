@@ -3,6 +3,7 @@ import {
   ciUnits,
   ruleText,
   type Config,
+  type Otherwise,
   type Rule,
 } from "@sargunv/rubberstamp-core";
 import { useState, type ReactNode } from "react";
@@ -150,24 +151,36 @@ export function SharedContext({
   );
 }
 
-/** Rules in the order they're checked, before the score decides. */
-function Rules({ rules }: { rules: Rule[] }) {
-  if (rules.length === 0) return null;
+const OTHERWISE: Record<Otherwise, string> = {
+  fits: "Otherwise apply if it fits",
+  apply: "Otherwise apply",
+  skip: "Otherwise skip",
+};
+
+/** Rules in the order they're checked, then what decides when none match. */
+function Rules({
+  rules,
+  otherwise,
+}: {
+  rules: Rule[];
+  otherwise: Otherwise | undefined;
+}) {
+  if (rules.length === 0 && otherwise === undefined) return null;
   return (
     <ol className="mt-2 list-inside list-decimal space-y-0.5 text-xs text-muted">
       {rules.map((rule, i) => (
         <li key={i}>{ruleText(rule)}</li>
       ))}
+      <li className="list-none">{OTHERWISE[otherwise ?? "fits"]}</li>
     </ol>
   );
 }
 
-/** The labels in a group's config that have rules of their own. */
-function groupLabelRules(config: Config, id: string): [string, Rule[]][] {
-  const labels = config.labels?.groups[id]?.labels ?? {};
-  return Object.entries(labels)
-    .filter(([, entry]) => entry.rules.length > 0)
-    .map(([name, entry]) => [name, entry.rules]);
+/** The entries in a group's config that have rules or an `otherwise`. */
+function ruledEntries(config: Config, id: string) {
+  return (config.labels?.groups[id]?.labels ?? []).filter(
+    (entry) => entry.rules.length > 0 || entry.otherwise !== undefined,
+  );
 }
 
 /** The label groups, with what Jev reads about each label. */
@@ -207,11 +220,14 @@ export function LabelGroups({
                 </li>
               ))}
             </ul>
-            <Rules rules={config.labels?.groups[group.id]?.rules ?? []} />
-            {groupLabelRules(config, group.id).map(([name, rules]) => (
-              <div key={name} className="mt-2">
-                <span className="font-mono text-xs">{name}</span>
-                <Rules rules={rules} />
+            <Rules
+              rules={config.labels?.groups[group.id]?.rules ?? []}
+              otherwise={config.labels?.groups[group.id]?.otherwise}
+            />
+            {ruledEntries(config, group.id).map((entry) => (
+              <div key={entry.name} className="mt-2">
+                <span className="font-mono text-xs">{entry.name}</span>
+                <Rules rules={entry.rules} otherwise={entry.otherwise} />
               </div>
             ))}
           </Entry>
@@ -270,7 +286,7 @@ export function CiUnits({ repo, config }: { repo: string; config: Config }) {
           detail={`threshold ${unit.threshold.toFixed(2)}`}
         >
           <p className="text-muted">{unit.covers}</p>
-          <Rules rules={unit.rules} />
+          <Rules rules={unit.rules} otherwise={unit.otherwise} />
         </Entry>
       ))}
     </ConfigSection>

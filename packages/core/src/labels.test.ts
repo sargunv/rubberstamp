@@ -25,7 +25,13 @@ const REPO_LABELS: RepoLabel[] = [
   { name: "good first issue", description: "Good for newcomers" },
 ];
 
-const ISSUE: Facts = { kind: "issue", paths: [], asks: {} };
+const yes = (p: number): Answer => ({
+  type: "choice",
+  choice: p >= 0.5 ? "yes" : "no",
+  probabilities: { yes: p, "only in passing": 0, no: 1 - p },
+});
+
+const ISSUE: Facts = { is: "issue", paths: [], asks: {} };
 
 const SOURCE = `
 context: |
@@ -100,7 +106,7 @@ describe("resolveLabels", () => {
 
   it("defaults thresholds by question type", () => {
     const { groups } = resolveLabels(config(), REPO_LABELS);
-    expect(groups.map((g) => g.threshold)).toEqual([0.5, 0.5, 0.7]);
+    expect(groups.map((g) => g.threshold)).toEqual([0.5, 0.65, 0.7]);
   });
 
   it("warns about missing labels and duplicates", () => {
@@ -187,12 +193,12 @@ describe("labelRequest", () => {
 });
 
 describe("question type", () => {
-  it("asks a noul for a lone label even with max 1", () => {
+  it("asks a label's own question for a lone label even with max 1", () => {
     const { groups } = resolveLabels(
       config("labels:\n  groups:\n    up: { max: 1, labels: [bug] }\n"),
       REPO_LABELS,
     );
-    expect(groups[0]).toMatchObject({ choice: false, threshold: 0.5 });
+    expect(groups[0]).toMatchObject({ choice: false, threshold: 0.65 });
   });
 });
 
@@ -204,11 +210,11 @@ describe("decideLabels", () => {
       choice: "bug",
       probabilities: { bug: 0.7, feature: 0.2, chore: 0.1 },
     },
-    "label:area:map": { type: "noul", noul: 0.45 },
-    "label:area:render": { type: "noul", noul: 0.3 },
-    "label:Area:Docs": { type: "noul", noul: 0.1 },
-    "label:binding:kotlin": { type: "noul", noul: 0.75 },
-    "label:binding:swift": { type: "noul", noul: 0.2 },
+    "label:area:map": yes(0.45),
+    "label:area:render": yes(0.3),
+    "label:Area:Docs": yes(0.1),
+    "label:binding:kotlin": yes(0.75),
+    "label:binding:swift": yes(0.2),
   };
   const scores = labelScores(groups, answers);
   const added = (present: string[]) =>
@@ -247,7 +253,7 @@ labels:
       ["area:map", "filled to min"],
       ["area:render", "filled to min"],
       ["binding:kotlin", ""],
-      ["binding:swift", "cut by max"],
+      ["binding:swift", "trimmed to max"],
     ]);
     expect(decisions.find((d) => d.label === "binding:swift")?.add).toBe(false);
   });
@@ -283,10 +289,15 @@ labels:
           rules:
             - { if: { files: [bindings/kotlin/*] }, then: apply }
       rules:
-        - if: { kind: pr }
-          unless: { ask: &specific Is this about particular bindings?, threshold: 0.3 }
+        - if: { is: pr }
+          unless: { ask: { question: &specific Is this about particular bindings?, threshold: 0.3 } }
           then: skip
-        - { if: { kind: issue }, unless: { ask: *specific }, then: skip }
+        - { if: { is: issue }, unless: { ask: *specific }, then: skip }
+    upstream:
+      labels:
+        - good first issue:
+            rules: [{ if: { files: [patches/**] }, then: apply }]
+            otherwise: skip
 `;
   const { groups } = resolveLabels(config(RULES), REPO_LABELS);
   const scores = {
@@ -295,6 +306,7 @@ labels:
     "Area:Docs": 0.9,
     "binding:kotlin": 0.2,
     "binding:swift": 0.8,
+    "good first issue": 0.9,
   };
   const pr: Item = {
     type: "pull request",
@@ -324,7 +336,7 @@ labels:
       );
   };
 
-  it("doesn't ask about a label that its rules always decide", () => {
+  it("asks about every label, even one its rules decide", () => {
     const decided = resolveLabels(
       config(`
 version: 1
@@ -346,7 +358,46 @@ labels:
     );
     expect(Object.keys(request.questions)).toEqual([
       "group:kind",
+      "label:binding:kotlin",
       "label:binding:swift",
+    ]);
+    expect(request.questions["label:binding:swift"]).toMatchObject({
+      type: "choice",
+      criteria: {
+        yes: expect.any(String),
+        "only in passing": expect.any(String),
+      },
+    });
+  });
+
+  it("takes an exact entry's meaning and runs its pattern's rules first", () => {
+    const merged = resolveLabels(
+      config(`
+version: 1
+labels:
+  groups:
+    binding:
+      labels:
+        "binding:*": { meaning: Some binding., rules: [{ if: { is: issue }, then: skip }] }
+        binding:kotlin: { meaning: Kotlin., rules: [{ then: apply }] }
+`),
+      REPO_LABELS,
+    ).groups[0]?.labels;
+    expect(merged).toEqual([
+      {
+        name: "binding:kotlin",
+        meaning: "Kotlin.",
+        fromConfig: true,
+        rules: [{ if: { is: "issue" }, then: "skip" }, { then: "apply" }],
+        otherwise: undefined,
+      },
+      {
+        name: "binding:swift",
+        meaning: "Some binding.",
+        fromConfig: true,
+        rules: [{ if: { is: "issue" }, then: "skip" }],
+        otherwise: undefined,
+      },
     ]);
   });
 
@@ -367,12 +418,14 @@ labels:
       "-Area:Docs (label rule 1)",
       "+binding:kotlin (label rule 1, matching bindings/kotlin/*)",
       "+binding:swift",
+      "-good first issue (otherwise: skip)",
     ]);
     expect(decide(pr, 0.2)).toEqual([
       "+area:render (filled to min)",
       "-Area:Docs (label rule 1)",
       "-binding:kotlin (group rule 1)",
       "-binding:swift (group rule 1)",
+      "-good first issue (otherwise: skip)",
     ]);
   });
 
@@ -383,21 +436,23 @@ labels:
       "-Area:Docs (label rule 1)",
       "-binding:kotlin (group rule 2)",
       "-binding:swift (group rule 2)",
+      "-good first issue (otherwise: skip)",
     ]);
     expect(decide(issue, 0.6)).toEqual([
       "+area:render (filled to min)",
       "-Area:Docs (label rule 1)",
       "+binding:swift",
+      "-good first issue (otherwise: skip)",
     ]);
   });
 
-  it("adds none of a group's labels when more pass than max with over: none", () => {
+  it("adds none of a group's labels when more pass than max with overflow: drop", () => {
     const capped = resolveLabels(
       config(`
 version: 1
 labels:
   groups:
-    binding: { labels: ["binding:*"], max: 1, over: none, threshold: 0.1 }
+    binding: { labels: ["binding:*"], max: 1, overflow: drop, threshold: 0.1 }
 `),
       REPO_LABELS,
     ).groups;
@@ -408,8 +463,8 @@ labels:
         d.rule,
       ]),
     ).toEqual([
-      ["binding:kotlin", false, "over max"],
-      ["binding:swift", false, "over max"],
+      ["binding:kotlin", false, "dropped over max"],
+      ["binding:swift", false, "dropped over max"],
     ]);
   });
 });

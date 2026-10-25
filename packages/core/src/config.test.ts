@@ -198,7 +198,9 @@ describe("ci config", () => {
     expect(ci?.units["linux-x64"]?.rules).toEqual([]);
     expect(ci?.units["ohos"]?.rules).toEqual([
       {
-        if: { files: ["cmake/platform/ohos.cmake", "mise.ohos.*"] },
+        if: {
+          files: ["cmake/platform/ohos.cmake", "mise.ohos.*", "mise.ohos.*/**"],
+        },
         then: "apply",
       },
     ]);
@@ -305,60 +307,83 @@ describe("rules", () => {
   const group = (body: string) =>
     errors(`version: 1\nlabels:\n  groups:\n    g: ${body}\n`);
 
-  it("parses conditions on groups, labels, and units", () => {
+  it("parses conditions, otherwise, and labels as a list or a map", () => {
     const result = parseConfig(`
 version: 1
 labels:
   groups:
+    kind:
+      labels: [bug, { chore: Maintenance. }]
     binding:
       labels: ["binding:*"]
       max: 3
-      over: none
+      overflow: drop
       rules:
-        - if: { kind: issue }
-          unless: { ask: Is this about particular bindings?, threshold: 0.3 }
+        - if: { is: issue }
+          unless: { ask: { question: Is this about particular bindings?, threshold: 0.3 } }
           then: skip
+        - { if: { is: pr, fits: 0.8 }, then: apply }
     upstream:
       labels:
         upstream:
           meaning: MapLibre Native's own code.
-          rules:
-            - { if: { files: [patches/*] }, then: apply }
-            - { then: skip }
+          rules: [{ if: { files: [patches/**] }, then: apply }]
+          otherwise: skip
 `);
     if (!result.ok) throw new Error(result.errors.join("\n"));
     const groups = result.config.labels?.groups;
-    expect(groups?.["binding"]).toMatchObject({ max: 3, over: "none" });
-    expect(groups?.["binding"]?.labels).toEqual({ "binding:*": { rules: [] } });
-    expect(groups?.["upstream"]?.labels["upstream"]?.rules).toEqual([
-      { if: { files: ["patches/*"] }, then: "apply" },
-      { then: "skip" },
+    expect(groups?.["kind"]?.labels).toEqual([
+      { name: "bug", rules: [] },
+      { name: "chore", meaning: "Maintenance.", rules: [] },
+    ]);
+    expect(groups?.["binding"]).toMatchObject({ max: 3, overflow: "drop" });
+    expect(groups?.["binding"]?.rules).toEqual([
+      {
+        if: { is: "issue" },
+        unless: {
+          ask: {
+            question: "Is this about particular bindings?",
+            threshold: 0.3,
+          },
+        },
+        then: "skip",
+      },
+      { if: { is: "pr", fits: 0.8 }, then: "apply" },
+    ]);
+    expect(groups?.["upstream"]?.labels).toEqual([
+      {
+        name: "upstream",
+        meaning: "MapLibre Native's own code.",
+        rules: [{ if: { files: ["patches/**"] }, then: "apply" }],
+        otherwise: "skip",
+      },
     ]);
   });
 
   it("checks conditions and outcomes", () => {
     expect(group("{ labels: [a], rules: [{ if: {}, then: skip }] }")).toEqual([
-      "labels.groups.g.rules.0.if: a condition needs kind, files, or ask",
+      "labels.groups.g.rules.0.if: a condition needs is, files, ask, or fits",
     ]);
     expect(
-      group(
-        "{ labels: [a], rules: [{ if: { kind: pr, threshold: 0.3 }, then: skip }] }",
-      ),
+      group("{ labels: [a], rules: [{ if: { fits: false }, then: skip }] }"),
     ).toEqual([
-      "labels.groups.g.rules.0.if.threshold: threshold applies only to ask",
+      "labels.groups.g.rules.0.if.fits: fits takes true or a threshold; negate it with unless",
     ]);
     expect(
-      group("{ labels: [a], rules: [{ if: { kind: pull }, then: drop }] }"),
+      group("{ labels: [a], rules: [{ if: { kind: pr }, then: drop }] }"),
     ).toHaveLength(2);
+    expect(group("{ labels: [a, { b: B, c: C }] }")).toEqual([
+      expect.stringMatching(/a list item maps one label/),
+    ]);
   });
 
-  it("needs a max and no min for over: none", () => {
-    expect(group("{ labels: [a], over: none }")).toEqual([
-      "labels.groups.g.over: over: none needs a max and no min",
+  it("needs a max and no min for overflow: drop", () => {
+    expect(group("{ labels: [a], overflow: drop }")).toEqual([
+      "labels.groups.g.overflow: overflow: drop needs a max and no min",
     ]);
-    expect(group("{ labels: [a], max: 2, min: 1, over: none }")).toEqual([
-      "labels.groups.g.over: over: none needs a max and no min",
+    expect(group("{ labels: [a], max: 2, min: 1, overflow: drop }")).toEqual([
+      "labels.groups.g.overflow: overflow: drop needs a max and no min",
     ]);
-    expect(group("{ labels: [a], max: 2, over: none }")).toEqual([]);
+    expect(group("{ labels: [a], max: 2, overflow: drop }")).toEqual([]);
   });
 });

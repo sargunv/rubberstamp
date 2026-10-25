@@ -14,10 +14,10 @@ import {
 import { hashJson } from "./hash.ts";
 import type { Answer, Json, Question, Request } from "./jev.ts";
 import {
-  alwaysDecides,
   askQuestions,
-  firstRule,
+  decide,
   ruleAsks,
+  type Otherwise,
   type Rule,
 } from "./rules.ts";
 
@@ -34,6 +34,7 @@ export type Unit = {
   id: string;
   covers: string;
   rules: Rule[];
+  otherwise: Otherwise;
   threshold: number;
 };
 
@@ -72,6 +73,7 @@ export function ciUnits(config: Config): Unit[] {
     id,
     covers: unit.covers,
     rules: unit.rules,
+    otherwise: unit.otherwise ?? "fits",
     threshold: unit.threshold ?? section.threshold ?? DEFAULT_CI_THRESHOLD,
   }));
 }
@@ -96,33 +98,31 @@ export function unitAsks(units: Unit[]): string[] {
   return ruleAsks(units.flatMap((unit) => unit.rules));
 }
 
-/** The questions for each unit a score can decide, and every rule question. */
+/** Every unit's built-in question, and every rule question. */
 export function unitQuestions(units: Unit[]): Record<string, Question> {
   const questions = Object.fromEntries(
-    units
-      .filter((unit) => !alwaysDecides(unit.rules))
-      .map((unit) => [
-        unitQuestionKey(unit),
-        {
-          type: "noul",
-          instructions: {
-            question:
-              `Should the \`${unit.id}\` CI coverage run to verify this pull ` +
-              "request before merging? A maintainer reviewing the diff would " +
-              "want to see it pass.",
-            coverage: squash(unit.covers),
-          },
-          criteria: {
-            true:
-              "The change modifies code, dependencies, tools, build logic, " +
-              "packaging, or job definitions that this coverage builds, " +
-              "installs, or tests in a way its result would verify.",
-            false:
-              "This coverage does not build, install, package, or test anything " +
-              "the change modifies in a way that matters.",
-          },
-        } satisfies Question,
-      ]),
+    units.map((unit) => [
+      unitQuestionKey(unit),
+      {
+        type: "noul",
+        instructions: {
+          question:
+            `Should the \`${unit.id}\` CI coverage run to verify this pull ` +
+            "request before merging? A maintainer reviewing the diff would " +
+            "want to see it pass.",
+          coverage: squash(unit.covers),
+        },
+        criteria: {
+          true:
+            "The change modifies code, dependencies, tools, build logic, " +
+            "packaging, or job definitions that this coverage builds, " +
+            "installs, or tests in a way its result would verify.",
+          false:
+            "This coverage does not build, install, package, or test anything " +
+            "the change modifies in a way that matters.",
+        },
+      } satisfies Question,
+    ]),
   );
   return { ...questions, ...askQuestions(unitAsks(units)) };
 }
@@ -181,8 +181,7 @@ export function planRequests(
 
 /**
  * Each unit's probability: the highest any chunk of the patch gave it. Null
- * when any chunk lacks a unit's answer, since a missing answer isn't a no. A
- * unit that its rules always decide isn't asked about and has no score.
+ * when any chunk lacks a unit's answer, since a missing answer isn't a no.
  */
 export function unitScores(
   units: Unit[],
@@ -190,7 +189,6 @@ export function unitScores(
 ): Record<string, number> | null {
   const scores: Record<string, number> = {};
   for (const unit of units) {
-    if (alwaysDecides(unit.rules)) continue;
     let highest = 0;
     for (const chunk of answers) {
       const answer = chunk[unitQuestionKey(unit)];
@@ -212,9 +210,10 @@ export function changedPaths(files: PullFile[]): string[] {
 }
 
 /**
- * Each unit's decision: the first of its rules that matches, or else its score
- * against its threshold. `asks` holds each rule question's probability, and
- * `since` is the pass the change was judged from, if not the merge base.
+ * Each unit's decision: the first of its rules that matches, or else its
+ * `otherwise`, by default its score against its threshold. `asks` holds each
+ * rule question's probability, and `since` is the pass the change was judged
+ * from, if not the merge base.
  */
 export function decideUnits(
   units: Unit[],
@@ -224,21 +223,20 @@ export function decideUnits(
   since?: string,
 ): UnitDecision[] {
   return units.map((unit) => {
-    const score = scores[unit.id];
-    const verdict = firstRule(
+    const score = scores[unit.id] ?? 0;
+    const verdict = decide(
       unit.rules,
-      { kind: "pr", paths, asks },
+      unit.otherwise,
+      { is: "pr", paths, asks },
+      { score, threshold: unit.threshold },
       (i) => `rule ${i + 1}`,
     );
     return {
       unit: unit.id,
       threshold: unit.threshold,
-      run:
-        verdict === undefined
-          ? (score ?? 0) >= unit.threshold
-          : verdict.then === "apply",
-      score: score ?? null,
-      rule: verdict?.why ?? "",
+      run: verdict.outcome === "apply" || verdict.outcome === "pass",
+      score,
+      rule: verdict.why,
       ...(since === undefined ? {} : { since }),
     };
   });

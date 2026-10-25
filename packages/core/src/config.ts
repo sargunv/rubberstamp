@@ -1,7 +1,8 @@
+import { escape } from "minimatch";
 import * as v from "valibot";
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
-import { glob } from "./glob.ts";
+import { nameGlob } from "./glob.ts";
 
 /** Where a repository keeps its Rubberstamp config. */
 export const CONFIG_PATH = ".config/rubberstamp.yml";
@@ -14,23 +15,35 @@ const Threshold = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
 const Count = v.pipe(v.number(), v.integer(), v.minValue(0));
 const Globs = v.pipe(v.array(Text), v.minLength(1));
 
+// A shape picked by the input's own type, so errors name what's wrong with it
+// rather than every shape it didn't match.
+const isObject = (input: unknown) =>
+  typeof input === "object" && input !== null && !Array.isArray(input);
+
+const Ask = v.pipe(
+  v.lazy((input) =>
+    isObject(input)
+      ? v.strictObject({ question: Text, threshold: v.optional(Threshold) })
+      : Text,
+  ),
+  v.transform((ask) => (typeof ask === "string" ? { question: ask } : ask)),
+);
+
+const Fits = v.union(
+  [v.literal(true), Threshold],
+  "fits takes true or a threshold; negate it with unless",
+);
+
 const Condition = v.pipe(
   v.strictObject({
-    kind: v.optional(v.picklist(["issue", "pr"])),
+    is: v.optional(v.picklist(["issue", "pr"])),
     files: v.optional(Globs),
-    ask: v.optional(Text),
-    threshold: v.optional(Threshold),
+    ask: v.optional(Ask),
+    fits: v.optional(Fits),
   }),
   v.check(
-    (c) => c.kind !== undefined || c.files !== undefined || c.ask !== undefined,
-    "a condition needs kind, files, or ask",
-  ),
-  v.forward(
-    v.check(
-      (c) => c.threshold === undefined || c.ask !== undefined,
-      "threshold applies only to ask",
-    ),
-    ["threshold"],
+    (c) => Object.values(c).some((value) => value !== undefined),
+    "a condition needs is, files, ask, or fits",
   ),
 );
 
@@ -45,41 +58,83 @@ const Rules = v.optional(
   [],
 );
 
+const Otherwise = v.optional(v.picklist(["fits", "apply", "skip"]));
+
 // A label is configured by its meaning alone, by nothing beyond the GitHub
 // description, or by an object that can also hold rules.
-const LabelEntry = v.pipe(
-  v.union([
-    Text,
-    v.null(),
-    v.strictObject({ meaning: v.optional(Text), rules: Rules }),
-  ]),
-  v.transform((entry) =>
-    typeof entry === "string"
-      ? { meaning: entry, rules: [] }
-      : (entry ?? { rules: [] }),
+const LabelValue = v.lazy((input) =>
+  input === null
+    ? v.null()
+    : isObject(input)
+      ? v.strictObject({
+          meaning: v.optional(Text),
+          rules: Rules,
+          otherwise: Otherwise,
+        })
+      : Text,
+);
+
+type LabelValue = v.InferOutput<typeof LabelValue>;
+
+export type LabelEntry = {
+  /** A label name, or a pattern where `*` matches anything. */
+  name: string;
+  meaning?: string | undefined;
+  rules: v.InferOutput<typeof Rules>;
+  otherwise?: v.InferOutput<typeof Otherwise>;
+};
+
+const entry = (name: string, value: LabelValue): LabelEntry =>
+  typeof value === "string"
+    ? { name, meaning: value, rules: [] }
+    : { name, rules: [], ...value };
+
+// A list names labels in order, each by itself or as a one-key map of the name
+// to its settings.
+const LabelList = v.pipe(
+  v.array(
+    v.lazy((input) =>
+      isObject(input)
+        ? v.pipe(
+            v.record(Text, LabelValue),
+            v.check(
+              (map) => Object.keys(map).length === 1,
+              "a list item maps one label",
+            ),
+          )
+        : Text,
+    ),
+  ),
+  v.minLength(1),
+  v.transform((items) =>
+    items.flatMap((item) =>
+      typeof item === "string"
+        ? [entry(item, null)]
+        : Object.entries(item).map(([name, value]) => entry(name, value)),
+    ),
   ),
 );
 
+const LabelMap = v.pipe(
+  v.record(Text, LabelValue),
+  v.check((labels) => Object.keys(labels).length > 0, "name a label"),
+  v.transform((labels) =>
+    Object.entries(labels).map(([name, value]) => entry(name, value)),
+  ),
+);
+
+const Labels = v.lazy((input) => (Array.isArray(input) ? LabelList : LabelMap));
+
 const LabelGroup = v.pipe(
   v.strictObject({
-    labels: v.union([
-      v.pipe(
-        Globs,
-        v.transform((names) =>
-          Object.fromEntries(names.map((name) => [name, { rules: [] }])),
-        ),
-      ),
-      v.pipe(
-        v.record(Text, LabelEntry),
-        v.check((labels) => Object.keys(labels).length > 0, "name a label"),
-      ),
-    ]),
+    labels: Labels,
     min: v.optional(Count, 0),
     max: v.optional(v.pipe(Count, v.minValue(1))),
-    over: v.optional(v.picklist(["cut", "none"]), "cut"),
+    overflow: v.optional(v.picklist(["trim", "drop"]), "trim"),
     guidance: v.optional(Text),
     threshold: v.optional(Threshold),
     rules: Rules,
+    otherwise: Otherwise,
   }),
   v.forward(
     v.check(
@@ -91,10 +146,11 @@ const LabelGroup = v.pipe(
   v.forward(
     v.check(
       (group) =>
-        group.over === "cut" || (group.max !== undefined && group.min === 0),
-      "over: none needs a max and no min",
+        group.overflow === "trim" ||
+        (group.max !== undefined && group.min === 0),
+      "overflow: drop needs a max and no min",
     ),
-    ["over"],
+    ["overflow"],
   ),
 );
 
@@ -117,6 +173,7 @@ const CiUnit = v.strictObject({
   covers: Text,
   threshold: v.optional(Threshold),
   rules: Rules,
+  otherwise: Otherwise,
 });
 
 // The workflow file GitHub names as a run's path. Only its successes count as
@@ -198,6 +255,28 @@ const defined = (entries: [string, unknown][]): Document =>
  * described label moves into the first group with a pattern matching it, which
  * is the group that version 0 gave it to.
  */
+/**
+ * A version 0 path pattern, whose `*` matched across `/`, as version 1 path
+ * globs. A whole-segment `*` becomes `**`, and a trailing `*` also matches
+ * what's under it. A `*` inside a middle segment now stops at `/`.
+ */
+function upgradeGlob(pattern: string): string[] {
+  const upgraded = pattern
+    .split("/")
+    .map((segment) =>
+      segment === "*"
+        ? "**"
+        : segment
+            .split("*")
+            .map((part) => escape(part))
+            .join("*"),
+    )
+    .join("/");
+  return upgraded.endsWith("*") && !upgraded.endsWith("**")
+    ? [upgraded, `${upgraded}/**`]
+    : [upgraded];
+}
+
 function upgradeV0(old: ConfigV0): Document {
   const labels = old.labels;
   const groups = Object.entries(labels?.groups ?? {}).map(
@@ -208,7 +287,9 @@ function upgradeV0(old: ConfigV0): Document {
   }
   for (const [name, meaning] of Object.entries(labels?.describe ?? {})) {
     const owner = groups.find(([, group]) =>
-      group.labels.some((pattern) => glob(pattern, { ignoreCase: true })(name)),
+      group.labels.some((pattern) =>
+        nameGlob(pattern, { ignoreCase: true })(name),
+      ),
     );
     if (!owner) continue;
     const entries = owner[2];
@@ -265,7 +346,12 @@ function upgradeV0(old: ConfigV0): Document {
                   [
                     "rules",
                     unit.paths.length > 0
-                      ? [{ if: { files: unit.paths }, then: "apply" }]
+                      ? [
+                          {
+                            if: { files: unit.paths.flatMap(upgradeGlob) },
+                            then: "apply",
+                          },
+                        ]
                       : undefined,
                   ],
                 ]),

@@ -24,8 +24,8 @@ const GROUP_NOTES = new Set([
   "filled to min",
   "group labeled",
   "present",
-  "cut by max",
-  "over max",
+  "trimmed to max",
+  "dropped over max",
 ]);
 /** Ruled rows of items, numbered in a red margin like a ledger. */
 export function Ledger({
@@ -229,12 +229,12 @@ function GroupScores({
           The item already had a label from this group, so Rubberstamp left it
           alone.
         </p>
-      ) : note === "cut by max" ? (
+      ) : note === "trimmed to max" ? (
         <p className="mt-2 text-xs text-muted">
           More passed than the maximum of {group.max}, so the least likely were
           left off.
         </p>
-      ) : note === "over max" ? (
+      ) : note === "dropped over max" ? (
         <p className="mt-2 text-xs text-muted">
           More passed than the maximum of {group.max}, so none were added.
         </p>
