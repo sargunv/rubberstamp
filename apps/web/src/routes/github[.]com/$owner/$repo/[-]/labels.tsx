@@ -17,11 +17,12 @@ export const Route = createFileRoute("/github.com/$owner/$repo/-/labels")({
     }
   },
   component: function Labels() {
-    const { repo, status, config, colors } = useReadyRepo();
+    const { repo, status, config, upgraded, colors } = useReadyRepo();
     const tab = {
       repo,
       path: status.config.path,
       config,
+      upgraded,
       groups: status.config.groups,
       colors,
       warnings: status.config.warnings,

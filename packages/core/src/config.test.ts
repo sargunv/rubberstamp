@@ -195,11 +195,16 @@ describe("ci config", () => {
       "maven",
     ]);
     expect(ci?.context).toMatch(/^Every CI job/);
-    expect(ci?.units["linux-x64"]?.paths).toEqual([]);
-    expect(ci?.units["ohos"]?.paths).toEqual([
-      "cmake/platform/ohos.cmake",
-      "mise.ohos.*",
+    expect(ci?.units["linux-x64"]?.rules).toEqual([]);
+    expect(ci?.units["ohos"]?.rules).toEqual([
+      {
+        if: {
+          files: ["cmake/platform/ohos.cmake", "mise.ohos.*", "mise.ohos.*/**"],
+        },
+        then: "apply",
+      },
     ]);
+    expect(result.upgraded).toMatch(/^version: 1\n/);
   });
 
   it("needs at least one unit", () => {
@@ -234,11 +239,151 @@ describe("ci config", () => {
     }
   });
 
+  it("rejects paths, which version 1 writes as a rule", () => {
+    expect(
+      errors(
+        "version: 1\nci:\n  units:\n    docs: { covers: Docs, paths: [docs/*] }\n",
+      ),
+    ).toEqual([expect.stringMatching(/^ci\.units\.docs\.paths/)]);
+  });
+
   it("rejects a unit without coverage or with unknown keys", () => {
     const found = errors(
       "ci:\n  units:\n    docs: { paths: [docs/*], jobs: [docs] }\n",
     );
     expect(found.some((e) => e.startsWith("ci.units.docs.covers"))).toBe(true);
     expect(found.some((e) => e.startsWith("ci.units.docs.jobs"))).toBe(true);
+  });
+});
+
+describe("versions", () => {
+  it("rejects a version it doesn't know", () => {
+    expect(errors("version: 2\n")).toEqual(["version: version must be 1"]);
+  });
+
+  it("reads a version 1 file as is, with no upgrade", () => {
+    const result = parseConfig("version: 1\n");
+    expect(result).toEqual({ ok: true, config: { version: 1 } });
+  });
+
+  it("upgrades version 0 labels into their groups and keeps its checks", () => {
+    const result = parseConfig(`
+labels:
+  groups:
+    kind: { min: 1, max: 1, labels: [bug, chore] }
+    area: { labels: ["area:*"], rule: Judge the subject. }
+    up: { labels: [upstream] }
+  describe:
+    Bug: Broken behavior.
+    area:docs: The docs as the subject.
+    stray: In no group.
+`);
+    if (!result.ok) throw new Error(result.errors.join("\n"));
+    expect(result.upgraded).toBe(`version: 1
+labels:
+  groups:
+    kind:
+      labels:
+        bug: Broken behavior.
+        chore: null
+      min: 1
+      max: 1
+    area:
+      labels:
+        area:*: null
+        area:docs: The docs as the subject.
+      guidance: Judge the subject.
+    up:
+      labels:
+        - upstream
+`);
+    expect(
+      errors("labels:\n  groups:\n    g: { labels: [a], min: 2, max: 1 }\n"),
+    ).toEqual(["labels.groups.g.min: min must not exceed max"]);
+  });
+});
+
+describe("rules", () => {
+  const group = (body: string) =>
+    errors(`version: 1\nlabels:\n  groups:\n    g: ${body}\n`);
+
+  it("parses conditions, otherwise, and labels as a list or a map", () => {
+    const result = parseConfig(`
+version: 1
+labels:
+  groups:
+    kind:
+      labels: [bug, { chore: Maintenance. }]
+    binding:
+      labels: ["binding:*"]
+      max: 3
+      overflow: drop
+      rules:
+        - if: { is: issue }
+          unless: { ask: { question: Is this about particular bindings?, threshold: 0.3 } }
+          then: skip
+        - { if: { is: pr, fits: 0.8 }, then: apply }
+    upstream:
+      labels:
+        upstream:
+          meaning: MapLibre Native's own code.
+          rules: [{ if: { files: [patches/**] }, then: apply }]
+          otherwise: skip
+`);
+    if (!result.ok) throw new Error(result.errors.join("\n"));
+    const groups = result.config.labels?.groups;
+    expect(groups?.["kind"]?.labels).toEqual([
+      { name: "bug", rules: [] },
+      { name: "chore", meaning: "Maintenance.", rules: [] },
+    ]);
+    expect(groups?.["binding"]).toMatchObject({ max: 3, overflow: "drop" });
+    expect(groups?.["binding"]?.rules).toEqual([
+      {
+        if: { is: "issue" },
+        unless: {
+          ask: {
+            question: "Is this about particular bindings?",
+            threshold: 0.3,
+          },
+        },
+        then: "skip",
+      },
+      { if: { is: "pr", fits: 0.8 }, then: "apply" },
+    ]);
+    expect(groups?.["upstream"]?.labels).toEqual([
+      {
+        name: "upstream",
+        meaning: "MapLibre Native's own code.",
+        rules: [{ if: { files: ["patches/**"] }, then: "apply" }],
+        otherwise: "skip",
+      },
+    ]);
+  });
+
+  it("checks conditions and outcomes", () => {
+    expect(group("{ labels: [a], rules: [{ if: {}, then: skip }] }")).toEqual([
+      "labels.groups.g.rules.0.if: a condition needs is, files, ask, or fits",
+    ]);
+    expect(
+      group("{ labels: [a], rules: [{ if: { fits: false }, then: skip }] }"),
+    ).toEqual([
+      "labels.groups.g.rules.0.if.fits: fits takes true or a threshold; negate it with unless",
+    ]);
+    expect(
+      group("{ labels: [a], rules: [{ if: { kind: pr }, then: drop }] }"),
+    ).toHaveLength(2);
+    expect(group("{ labels: [a, { b: B, c: C }] }")).toEqual([
+      expect.stringMatching(/a list item maps one label/),
+    ]);
+  });
+
+  it("needs a max and no min for overflow: drop", () => {
+    expect(group("{ labels: [a], overflow: drop }")).toEqual([
+      "labels.groups.g.overflow: overflow: drop needs a max and no min",
+    ]);
+    expect(group("{ labels: [a], max: 2, min: 1, overflow: drop }")).toEqual([
+      "labels.groups.g.overflow: overflow: drop needs a max and no min",
+    ]);
+    expect(group("{ labels: [a], max: 2, overflow: drop }")).toEqual([]);
   });
 });

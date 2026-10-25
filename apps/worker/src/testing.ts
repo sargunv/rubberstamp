@@ -38,8 +38,16 @@ export function jev(requests: Request[]) {
           choice: "bug",
           probabilities: { bug: 0.9, feature: 0.1 },
         },
-        "label:area:map": { type: "noul", noul: 0.95 },
-        "label:area:docs": { type: "noul", noul: 0.1 },
+        "label:area:map": {
+          type: "choice",
+          choice: "yes",
+          probabilities: { yes: 0.95, "only in passing": 0.03, no: 0.02 },
+        },
+        "label:area:docs": {
+          type: "choice",
+          choice: "no",
+          probabilities: { yes: 0.1, "only in passing": 0.2, no: 0.7 },
+        },
       },
     };
   };

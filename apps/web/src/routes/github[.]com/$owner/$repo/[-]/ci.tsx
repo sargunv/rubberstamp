@@ -5,7 +5,14 @@ import { CiTab } from "../../../../../components/ci-tab.tsx";
 
 export const Route = createFileRoute("/github.com/$owner/$repo/-/ci")({
   component: function Ci() {
-    const { repo, status, config } = useReadyRepo();
-    return <CiTab repo={repo} path={status.config.path} config={config} />;
+    const { repo, status, config, upgraded } = useReadyRepo();
+    return (
+      <CiTab
+        repo={repo}
+        path={status.config.path}
+        config={config}
+        upgraded={upgraded}
+      />
+    );
   },
 });

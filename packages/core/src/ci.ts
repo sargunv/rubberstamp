@@ -11,9 +11,15 @@ import {
   squash,
   type PullFile,
 } from "./describe.ts";
-import { glob } from "./glob.ts";
 import { hashJson } from "./hash.ts";
 import type { Answer, Json, Question, Request } from "./jev.ts";
+import {
+  askQuestions,
+  decide,
+  ruleAsks,
+  type Otherwise,
+  type Rule,
+} from "./rules.ts";
 
 export const DEFAULT_CI_THRESHOLD = 0.5;
 // One request sees the state and its questions within Jev's context. Code and
@@ -27,7 +33,8 @@ const MAX_CHUNKS = 8;
 export type Unit = {
   id: string;
   covers: string;
-  paths: string[];
+  rules: Rule[];
+  otherwise: Otherwise;
   threshold: number;
 };
 
@@ -48,7 +55,7 @@ export const UnitDecision = v.object({
   run: v.boolean(),
   /** Jev's probability, or null when a rule decided without asking. */
   score: v.nullable(v.number()),
-  /** Why the unit runs regardless of its score, or "" when the score decided. */
+  /** What decided the unit regardless of its score, or "" when the score did. */
   rule: v.string(),
   /**
    * The commit where the unit last passed, when it was judged only on what
@@ -65,7 +72,8 @@ export function ciUnits(config: Config): Unit[] {
   return Object.entries(section.units).map(([id, unit]) => ({
     id,
     covers: unit.covers,
-    paths: unit.paths,
+    rules: unit.rules,
+    otherwise: unit.otherwise ?? "fits",
     threshold: unit.threshold ?? section.threshold ?? DEFAULT_CI_THRESHOLD,
   }));
 }
@@ -85,8 +93,14 @@ export function unitQuestionKey(unit: Unit): string {
   return `unit:${unit.id}`;
 }
 
+/** The questions the units' rules ask, each once. */
+export function unitAsks(units: Unit[]): string[] {
+  return ruleAsks(units.flatMap((unit) => unit.rules));
+}
+
+/** Every unit's built-in question, and every rule question. */
 export function unitQuestions(units: Unit[]): Record<string, Question> {
-  return Object.fromEntries(
+  const questions = Object.fromEntries(
     units.map((unit) => [
       unitQuestionKey(unit),
       {
@@ -110,6 +124,7 @@ export function unitQuestions(units: Unit[]): Record<string, Question> {
       } satisfies Question,
     ]),
   );
+  return { ...questions, ...askQuestions(unitAsks(units)) };
 }
 
 /**
@@ -195,24 +210,33 @@ export function changedPaths(files: PullFile[]): string[] {
 }
 
 /**
- * Units at or above their threshold, and every unit a changed path forces.
- * `since` is the pass the change was judged from, if not the merge base.
+ * Each unit's decision: the first of its rules that matches, or else its
+ * `otherwise`, by default its score against its threshold. `asks` holds each
+ * rule question's probability, and `since` is the pass the change was judged
+ * from, if not the merge base.
  */
 export function decideUnits(
   units: Unit[],
   scores: Record<string, number>,
+  asks: Record<string, number>,
   paths: string[],
   since?: string,
 ): UnitDecision[] {
   return units.map((unit) => {
     const score = scores[unit.id] ?? 0;
-    const forced = unit.paths.find((pattern) => paths.some(glob(pattern)));
+    const verdict = decide(
+      unit.rules,
+      unit.otherwise,
+      { is: "pr", paths, asks },
+      { score, threshold: unit.threshold },
+      (i) => `rule ${i + 1}`,
+    );
     return {
       unit: unit.id,
       threshold: unit.threshold,
-      run: forced !== undefined || score >= unit.threshold,
+      run: verdict.outcome === "apply" || verdict.outcome === "pass",
       score,
-      rule: forced === undefined ? "" : `matches ${forced}`,
+      rule: verdict.why,
       ...(since === undefined ? {} : { since }),
     };
   });

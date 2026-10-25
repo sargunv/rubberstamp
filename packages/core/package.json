@@ -4,5 +4,9 @@
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "exports": { ".": "./src/index.ts" },
-  "dependencies": { "valibot": "catalog:", "yaml": "catalog:" }
+  "dependencies": {
+    "minimatch": "catalog:",
+    "valibot": "catalog:",
+    "yaml": "catalog:"
+  }
 }

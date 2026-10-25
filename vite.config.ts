@@ -19,6 +19,9 @@ export default defineConfig({
       ],
       "typescript/no-non-null-assertion": "error",
       "typescript/no-floating-promises": "error",
+      // A config rule's outcome is its `then` key, a string, so no rule is
+      // ever thenable.
+      "unicorn/no-thenable": "off",
     },
   },
 });

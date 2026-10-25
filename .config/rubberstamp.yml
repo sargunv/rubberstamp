@@ -1,3 +1,4 @@
+version: 1
 context: |
   Rubberstamp is a GitHub App on Cloudflare Workers that uses TypeSafe's Jev
   model to label new issues and pull requests, and later to select which CI to

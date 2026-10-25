@@ -8,12 +8,15 @@ import {
   everyUnit,
   noUnit,
   planRequests,
+  unitAsks,
   unitScores,
   type Change,
 } from "./ci.ts";
 import { parseConfig, type Config } from "./config.ts";
+import { askScores } from "./rules.ts";
 
 const SOURCE = `
+version: 1
 context: A C API for MapLibre Native.
 ci:
   context: Linux x64 runs every test suite.
@@ -23,7 +26,7 @@ ci:
       covers: Linux x64 with every binding's tests.
     macos:
       covers: macOS with Metal.
-      paths: [src/platform/apple/*]
+      rules: [{ if: { files: [src/platform/apple/**] }, then: apply }]
       threshold: 0.3
 `;
 
@@ -112,7 +115,7 @@ describe("decideUnits", () => {
         "unit:macos": { type: "noul", noul: 0.05 },
       },
     ]);
-    expect(decideUnits(units, scores ?? {}, ["src/map.cpp"])).toEqual([
+    expect(decideUnits(units, scores ?? {}, {}, ["src/map.cpp"])).toEqual([
       { unit: "linux-x64", threshold: 0.6, run: true, score: 0.6, rule: "" },
       { unit: "macos", threshold: 0.3, run: false, score: 0.1, rule: "" },
     ]);
@@ -130,7 +133,78 @@ describe("decideUnits", () => {
     ).toBeNull();
   });
 
-  it("forces a unit whose paths match a changed file, renames included", () => {
+  it("skips a unit when its rule's question falls short, whatever its score", () => {
+    const gated = ciUnits(
+      config(`
+version: 1
+ci:
+  units:
+    docs:
+      covers: The docs site.
+      rules: [{ unless: { ask: { question: Does this change the docs?, threshold: 0.4 } }, then: skip }]
+`),
+    );
+    const [request] = planRequests(config(), gated, change([FILE]), "m") ?? [];
+    expect(Object.keys(request?.questions ?? {})).toEqual([
+      "unit:docs",
+      "ask:1",
+    ]);
+    const answers = [
+      {
+        "unit:docs": { type: "noul", noul: 0.9 },
+        "ask:1": { type: "noul", noul: 0.1 },
+      },
+      {
+        "unit:docs": { type: "noul", noul: 0.9 },
+        "ask:1": { type: "noul", noul: 0.3 },
+      },
+    ] as const;
+    const asks = askScores(unitAsks(gated), [...answers]);
+    expect(asks).toEqual({ "Does this change the docs?": 0.3 });
+    expect(decideUnits(gated, { docs: 0.9 }, asks ?? {}, [])).toEqual([
+      { unit: "docs", threshold: 0.5, run: false, score: 0.9, rule: "rule 1" },
+    ]);
+    expect(
+      decideUnits(
+        gated,
+        { docs: 0.9 },
+        { "Does this change the docs?": 0.4 },
+        [],
+      )[0]?.run,
+    ).toBe(true);
+  });
+
+  it("decides a unit by its otherwise when no rule matches", () => {
+    const decided = ciUnits(
+      config(`
+version: 1
+ci:
+  units:
+    docs: { covers: Docs, rules: [{ if: { files: [docs/**] }, then: apply }], otherwise: skip }
+    linux: { covers: Linux }
+`),
+    );
+    expect(
+      decideUnits(decided, { docs: 0.9, linux: 0.7 }, {}, ["src/map.cpp"]),
+    ).toEqual([
+      {
+        unit: "docs",
+        threshold: 0.5,
+        run: false,
+        score: 0.9,
+        rule: "otherwise: skip",
+      },
+      { unit: "linux", threshold: 0.5, run: true, score: 0.7, rule: "" },
+    ]);
+    expect(
+      decideUnits(decided, { docs: 0.1, linux: 0.7 }, {}, ["docs/a/b.md"])[0],
+    ).toMatchObject({
+      run: true,
+      rule: "rule 1, matching docs/**",
+    });
+  });
+
+  it("applies a unit whose rule matches a changed file, renames included", () => {
     const paths = changedPaths([
       {
         ...FILE,
@@ -139,12 +213,12 @@ describe("decideUnits", () => {
         status: "renamed",
       },
     ]);
-    expect(decideUnits(units, { macos: 0.05 }, paths)[1]).toEqual({
+    expect(decideUnits(units, { macos: 0.05 }, {}, paths)[1]).toEqual({
       unit: "macos",
       threshold: 0.3,
       run: true,
       score: 0.05,
-      rule: "matches src/platform/apple/*",
+      rule: "rule 1, matching src/platform/apple/**",
     });
   });
 
@@ -168,7 +242,7 @@ describe("decideUnits", () => {
   });
 
   it("records the pass a unit was judged since, and skips by rule", () => {
-    expect(decideUnits(units, { macos: 0.5 }, [], "abc123")[1]).toEqual({
+    expect(decideUnits(units, { macos: 0.5 }, {}, [], "abc123")[1]).toEqual({
       unit: "macos",
       threshold: 0.3,
       run: true,

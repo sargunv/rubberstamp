@@ -15,6 +15,7 @@ It's free for public repositories. Private repositories are by invitation.
 3. Add `.config/rubberstamp.yml` to the default branch:
 
 ```yaml
+version: 1
 context: |
   What this repository is and how its titles are written, to help judge each
   issue and pull request.
@@ -25,8 +26,51 @@ labels:
     area: { labels: ["area:*"] }
 ```
 
-Each group lists labels by name or pattern. `min` and `max` bound how many of a
-group's labels an item gets.
+Each group lists labels by name or pattern, each of which can map to the meaning
+Jev reads in place of the GitHub description, as in `labels: [bug, { chore:
+Maintenance that fixes nothing. }]`. An exact name takes its meaning ahead of a
+pattern's. `min` and `max` bound how many of a group's labels an item gets; with
+`overflow: drop`, an item that passes more than `max` gets none of them.
+
+Rubberstamp asks Jev whether each label fits the item, and adds those that pass
+the group's `threshold`: 0.65 for a group's own labels, or 0.5 for a group with
+`max: 1`, which is asked as one choice.
+
+A config without `version` is version 0, which Rubberstamp still reads. The
+dashboard shows its version 1 equivalent.
+
+## Rules
+
+A group, a label, or a CI unit can have `rules` that decide before the score
+does. Rubberstamp checks a label's group rules, then its own, and the first rule
+whose `if` holds and whose `unless` doesn't applies or skips the label. When no
+rule matches, `otherwise` decides: `fits` by default, or `apply` or `skip`. A
+condition holds when all its keys do:
+
+- `is`: the item is an `issue` or a `pr`.
+- `files`: a changed file matches one of these globs, as in GitHub Actions path
+  filters. An issue has no changed files.
+- `fits`: the label or unit passes its own question, at its threshold or at the
+  one given, as in `fits: 0.8`.
+- `ask`: Jev answers yes to this question, as in `ask: { question: Is it a
+  typo?, threshold: 0.3 }` (0.5 by default).
+
+```yaml
+binding:
+  labels: ["binding:*"]
+  rules:
+    - unless:
+        ask: { question: Is this about particular bindings?, threshold: 0.3 }
+      then: skip
+upstream:
+  labels:
+    - upstream:
+        meaning: The work changes the vendored engine.
+        rules: [{ if: { files: [patches/**] }, then: apply }]
+        otherwise: skip
+```
+
+Every question goes into the same request, so a rule costs little.
 
 ## CI selection
 
@@ -40,13 +84,13 @@ ci:
     linux: { covers: Builds and tests everything on Linux. }
     macos:
       covers: Builds the Metal renderer and runs its tests on macOS.
-      paths: [src/platform/apple/**]
+      rules: [{ if: { files: [src/platform/apple/**] }, then: apply }]
 ```
 
-A unit runs when Jev thinks the change needs it or a changed file matches its
-`paths`. A plan job asks Rubberstamp for the plan, and later jobs gate on unit
-ids. Pull requests get a plan; every other event runs everything, as does any
-error or timeout.
+A unit runs when Jev thinks the change needs it, unless one of its rules decides
+first, as with labels. A plan job asks Rubberstamp for the plan, and later jobs
+gate on unit ids. Pull requests get a plan; every other event runs everything,
+as does any error or timeout.
 
 `workflow` names the workflow file whose jobs gate on units. When a run of it
 succeeds, the units it ran passed, and later pushes judge each unit only on what
