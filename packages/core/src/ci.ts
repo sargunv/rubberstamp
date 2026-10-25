@@ -13,7 +13,13 @@ import {
 } from "./describe.ts";
 import { hashJson } from "./hash.ts";
 import type { Answer, Json, Question, Request } from "./jev.ts";
-import { askQuestions, firstRule, ruleAsks, type Rule } from "./rules.ts";
+import {
+  alwaysDecides,
+  askQuestions,
+  firstRule,
+  ruleAsks,
+  type Rule,
+} from "./rules.ts";
 
 export const DEFAULT_CI_THRESHOLD = 0.5;
 // One request sees the state and its questions within Jev's context. Code and
@@ -90,30 +96,33 @@ export function unitAsks(units: Unit[]): string[] {
   return ruleAsks(units.flatMap((unit) => unit.rules));
 }
 
+/** The questions for each unit a score can decide, and every rule question. */
 export function unitQuestions(units: Unit[]): Record<string, Question> {
   const questions = Object.fromEntries(
-    units.map((unit) => [
-      unitQuestionKey(unit),
-      {
-        type: "noul",
-        instructions: {
-          question:
-            `Should the \`${unit.id}\` CI coverage run to verify this pull ` +
-            "request before merging? A maintainer reviewing the diff would " +
-            "want to see it pass.",
-          coverage: squash(unit.covers),
-        },
-        criteria: {
-          true:
-            "The change modifies code, dependencies, tools, build logic, " +
-            "packaging, or job definitions that this coverage builds, " +
-            "installs, or tests in a way its result would verify.",
-          false:
-            "This coverage does not build, install, package, or test anything " +
-            "the change modifies in a way that matters.",
-        },
-      } satisfies Question,
-    ]),
+    units
+      .filter((unit) => !alwaysDecides(unit.rules))
+      .map((unit) => [
+        unitQuestionKey(unit),
+        {
+          type: "noul",
+          instructions: {
+            question:
+              `Should the \`${unit.id}\` CI coverage run to verify this pull ` +
+              "request before merging? A maintainer reviewing the diff would " +
+              "want to see it pass.",
+            coverage: squash(unit.covers),
+          },
+          criteria: {
+            true:
+              "The change modifies code, dependencies, tools, build logic, " +
+              "packaging, or job definitions that this coverage builds, " +
+              "installs, or tests in a way its result would verify.",
+            false:
+              "This coverage does not build, install, package, or test anything " +
+              "the change modifies in a way that matters.",
+          },
+        } satisfies Question,
+      ]),
   );
   return { ...questions, ...askQuestions(unitAsks(units)) };
 }
@@ -172,7 +181,8 @@ export function planRequests(
 
 /**
  * Each unit's probability: the highest any chunk of the patch gave it. Null
- * when any chunk lacks a unit's answer, since a missing answer isn't a no.
+ * when any chunk lacks a unit's answer, since a missing answer isn't a no. A
+ * unit that its rules always decide isn't asked about and has no score.
  */
 export function unitScores(
   units: Unit[],
@@ -180,6 +190,7 @@ export function unitScores(
 ): Record<string, number> | null {
   const scores: Record<string, number> = {};
   for (const unit of units) {
+    if (alwaysDecides(unit.rules)) continue;
     let highest = 0;
     for (const chunk of answers) {
       const answer = chunk[unitQuestionKey(unit)];
@@ -213,7 +224,7 @@ export function decideUnits(
   since?: string,
 ): UnitDecision[] {
   return units.map((unit) => {
-    const score = scores[unit.id] ?? 0;
+    const score = scores[unit.id];
     const verdict = firstRule(
       unit.rules,
       { kind: "pr", paths, asks },
@@ -224,9 +235,9 @@ export function decideUnits(
       threshold: unit.threshold,
       run:
         verdict === undefined
-          ? score >= unit.threshold
+          ? (score ?? 0) >= unit.threshold
           : verdict.then === "apply",
-      score,
+      score: score ?? null,
       rule: verdict?.why ?? "",
       ...(since === undefined ? {} : { since }),
     };

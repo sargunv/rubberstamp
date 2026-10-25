@@ -3,6 +3,7 @@ import { squash } from "./describe.ts";
 import { glob } from "./glob.ts";
 import type { Answer, Json, Question } from "./jev.ts";
 import {
+  alwaysDecides,
   askQuestions,
   firstRule,
   ruleAsks,
@@ -140,11 +141,18 @@ export function labelQuestionKey(label: ResolvedLabel): string {
   return `label:${label.name}`;
 }
 
+/** Whether a label's own score can decide it, so it's worth asking about. */
+function scored(group: ResolvedGroup, label: ResolvedLabel): boolean {
+  return !alwaysDecides([...group.rules, ...label.rules]);
+}
+
+/** The questions for each label a score can decide, and every rule question. */
 export function labelQuestions(
   groups: ResolvedGroup[],
 ): Record<string, Question> {
   const questions: Record<string, Question> = {};
   for (const group of groups) {
+    if (!group.labels.some((label) => scored(group, label))) continue;
     const guidance: Record<string, Json> = group.guidance
       ? { guidance: group.guidance }
       : {};
@@ -168,6 +176,7 @@ export function labelQuestions(
       continue;
     }
     for (const label of group.labels) {
+      if (!scored(group, label)) continue;
       questions[labelQuestionKey(label)] = {
         type: "noul",
         instructions: {

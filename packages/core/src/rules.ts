@@ -27,6 +27,16 @@ export type Facts = {
 
 export const DEFAULT_ASK_THRESHOLD = 0.5;
 
+/**
+ * Whether the rules decide every item, because one has no condition. A score
+ * they'd override isn't worth asking for.
+ */
+export function alwaysDecides(rules: Rule[]): boolean {
+  return rules.some(
+    (rule) => rule.if === undefined && rule.unless === undefined,
+  );
+}
+
 /** The questions the rules ask, each once, in the order they first appear. */
 export function ruleAsks(rules: Rule[]): string[] {
   const asks = rules.flatMap((rule) =>

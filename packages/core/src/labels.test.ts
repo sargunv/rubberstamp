@@ -324,6 +324,32 @@ labels:
       );
   };
 
+  it("doesn't ask about a label that its rules always decide", () => {
+    const decided = resolveLabels(
+      config(`
+version: 1
+labels:
+  groups:
+    kind: { min: 1, max: 1, labels: [bug, feature] }
+    binding:
+      labels:
+        binding:kotlin: { rules: [{ then: skip }] }
+        binding:swift: ~
+`),
+      REPO_LABELS,
+    ).groups;
+    const request = labelRequest(
+      config(),
+      decided,
+      { type: "issue", title: "", body: null },
+      "m",
+    );
+    expect(Object.keys(request.questions)).toEqual([
+      "group:kind",
+      "label:binding:swift",
+    ]);
+  });
+
   it("takes a label's exact entry over its pattern's", () => {
     const kotlin = groups[1]?.labels.find((l) => l.name === "binding:kotlin");
     expect(kotlin).toMatchObject({

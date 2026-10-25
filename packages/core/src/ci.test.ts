@@ -174,6 +174,28 @@ ci:
     ).toBe(true);
   });
 
+  it("doesn't ask about a unit that its rules always decide", () => {
+    const decided = ciUnits(
+      config(`
+version: 1
+ci:
+  units:
+    docs: { covers: Docs, rules: [{ if: { files: [docs/*] }, then: apply }, { then: skip }] }
+    linux: { covers: Linux }
+`),
+    );
+    const [request] =
+      planRequests(config(), decided, change([FILE]), "m") ?? [];
+    expect(Object.keys(request?.questions ?? {})).toEqual(["unit:linux"]);
+    const scores = unitScores(decided, [
+      { "unit:linux": { type: "noul", noul: 0.7 } },
+    ]);
+    expect(decideUnits(decided, scores ?? {}, {}, ["src/map.cpp"])).toEqual([
+      { unit: "docs", threshold: 0.5, run: false, score: null, rule: "rule 2" },
+      { unit: "linux", threshold: 0.5, run: true, score: 0.7, rule: "" },
+    ]);
+  });
+
   it("applies a unit whose rule matches a changed file, renames included", () => {
     const paths = changedPaths([
       {
