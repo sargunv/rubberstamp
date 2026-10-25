@@ -157,8 +157,8 @@ export const Account = v.object({
   period: v.string(),
   allowance: v.object({
     used: v.number(),
-    /** Whether the account has a custom allowance. */
-    raised: v.boolean(),
+    /** The account's allowance as a multiple of the default, 1 when it's the default. */
+    multiplier: v.number(),
     /** Whether Rubberstamp's shared monthly ceiling is spent, which stops every account. */
     ceilingReached: v.boolean(),
   }),

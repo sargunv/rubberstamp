@@ -313,9 +313,7 @@ api.get("/accounts/:owner", async (c) => {
     period,
     allowance: {
       used: usage.reduce((sum, u) => sum + u.tokens, 0) / allowance,
-      raised:
-        budgetFor(budgets, installation.account).installation !==
-        budgets.installation,
+      multiplier: allowance / Math.max(1, budgets.installation),
       ceilingReached: global >= budgets.global,
     },
     repos,
