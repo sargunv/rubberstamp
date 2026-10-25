@@ -27,6 +27,7 @@ const day = new Intl.DateTimeFormat("en", {
   day: "numeric",
   timeZone: "UTC",
 });
+const times = new Intl.NumberFormat("en", { maximumFractionDigits: 1 });
 const when = new Intl.DateTimeFormat("en", {
   month: "short",
   day: "numeric",
@@ -221,7 +222,7 @@ function Allowance({
   hovered: string | null;
   onHover: (repo: string | null) => void;
 }) {
-  const { used, raised, ceilingReached } = account.allowance;
+  const { used, multiplier, ceilingReached } = account.allowance;
   const { start, end, elapsed } = month(account.period);
   const spent = used >= 1;
   // Past the allowance, shares shrink to fit and the overflow shows in red.
@@ -240,8 +241,10 @@ function Allowance({
             {percent(used)}
           </span>{" "}
           of {monthName.format(start)}'s allowance used
-          {raised ? (
-            <span className="ml-2 font-mono text-xs text-muted">raised</span>
+          {multiplier !== 1 ? (
+            <span className="ml-2 font-mono text-xs text-muted">
+              {times.format(multiplier)}× the default
+            </span>
           ) : null}
         </h2>
         <MetaLine>Resets {day.format(end)}</MetaLine>
