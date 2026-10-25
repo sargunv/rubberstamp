@@ -1,5 +1,10 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { ciUnits, type Config } from "@sargunv/rubberstamp-core";
+import {
+  ciUnits,
+  ruleText,
+  type Config,
+  type Rule,
+} from "@sargunv/rubberstamp-core";
 import { useState, type ReactNode } from "react";
 
 import type { Group } from "../preview.ts";
@@ -107,10 +112,13 @@ export function SharedContext({
   repo,
   path,
   context,
+  upgraded,
 }: {
   repo: string;
   path: string;
   context: string | undefined;
+  /** The config as version 1, when the file is an older version. */
+  upgraded: string | undefined;
 }) {
   return (
     <div>
@@ -126,8 +134,40 @@ export function SharedContext({
         {context ? ", with context for every feature:" : null}
       </p>
       {context ? <Context text={context} /> : null}
+      {upgraded === undefined ? null : (
+        <details className="mt-4 max-w-3xl">
+          <summary className="cursor-pointer text-sm text-muted">
+            This config has no{" "}
+            <code className="font-mono text-ink">version</code>, so Rubberstamp
+            reads it as version 0. Show it as version 1.
+          </summary>
+          <CodeSample className="mt-2" caption={path}>
+            {upgraded}
+          </CodeSample>
+        </details>
+      )}
     </div>
   );
+}
+
+/** Rules in the order they're checked, before the score decides. */
+function Rules({ rules }: { rules: Rule[] }) {
+  if (rules.length === 0) return null;
+  return (
+    <ol className="mt-2 list-inside list-decimal space-y-0.5 text-xs text-muted">
+      {rules.map((rule, i) => (
+        <li key={i}>{ruleText(rule)}</li>
+      ))}
+    </ol>
+  );
+}
+
+/** The labels in a group's config that have rules of their own. */
+function groupLabelRules(config: Config, id: string): [string, Rule[]][] {
+  const labels = config.labels?.groups[id]?.labels ?? {};
+  return Object.entries(labels)
+    .filter(([, entry]) => entry.rules.length > 0)
+    .map(([name, entry]) => [name, entry.rules]);
 }
 
 /** The label groups, with what Jev reads about each label. */
@@ -142,7 +182,6 @@ export function LabelGroups({
   colors: Map<string, string>;
   warnings: string[];
 }) {
-  const overridden = new Set(Object.keys(config.labels?.describe ?? {}));
   return (
     <ConfigSection
       title="Label groups"
@@ -163,11 +202,18 @@ export function LabelGroups({
                     name={label.name}
                     color={colors.get(label.name) ?? "888888"}
                     meaning={label.meaning}
-                    fromConfig={overridden.has(label.name)}
+                    fromConfig={label.fromConfig ?? false}
                   />
                 </li>
               ))}
             </ul>
+            <Rules rules={config.labels?.groups[group.id]?.rules ?? []} />
+            {groupLabelRules(config, group.id).map(([name, rules]) => (
+              <div key={name} className="mt-2">
+                <span className="font-mono text-xs">{name}</span>
+                <Rules rules={rules} />
+              </div>
+            ))}
           </Entry>
         ))}
       </Tooltip.Provider>
@@ -224,17 +270,7 @@ export function CiUnits({ repo, config }: { repo: string; config: Config }) {
           detail={`threshold ${unit.threshold.toFixed(2)}`}
         >
           <p className="text-muted">{unit.covers}</p>
-          {unit.paths.length > 0 ? (
-            <p className="mt-2 text-xs text-muted">
-              Always runs for changes to{" "}
-              {unit.paths.map((path, i) => (
-                <span key={path}>
-                  {i > 0 ? ", " : null}
-                  <code className="font-mono text-ink">{path}</code>
-                </span>
-              ))}
-            </p>
-          ) : null}
+          <Rules rules={unit.rules} />
         </Entry>
       ))}
     </ConfigSection>

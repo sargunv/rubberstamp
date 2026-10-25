@@ -15,6 +15,7 @@ export function LabelsTab({
   repo,
   path,
   config,
+  upgraded,
   groups,
   colors,
   warnings,
@@ -23,6 +24,7 @@ export function LabelsTab({
   repo: string;
   path: string;
   config: Config;
+  upgraded: string | undefined;
   groups: Group[];
   colors: Map<string, string>;
   warnings: string[];
@@ -32,7 +34,8 @@ export function LabelsTab({
   if (!config.labels || !preview) {
     return (
       <Unconfigured
-        example={`labels:
+        example={`version: 1
+labels:
   groups:
     kind: { min: 1, max: 1, labels: [bug, feature, chore] }
     area: { labels: ["area:*"] }`}
@@ -44,7 +47,12 @@ export function LabelsTab({
   }
   return (
     <>
-      <SharedContext repo={repo} path={path} context={config.context} />
+      <SharedContext
+        repo={repo}
+        path={path}
+        context={config.context}
+        upgraded={upgraded}
+      />
       <LabelGroups
         config={config}
         groups={groups}

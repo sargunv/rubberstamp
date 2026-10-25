@@ -45,8 +45,16 @@ export const PreviewGroup = v.object({
   choice: v.boolean(),
   min: v.number(),
   max: v.optional(v.number()),
+  /** Absent from previews made before `over` existed, which always cut. */
+  over: v.optional(v.picklist(["cut", "none"])),
   threshold: v.number(),
-  labels: v.array(v.object({ name: v.string(), meaning: v.string() })),
+  labels: v.array(
+    v.object({
+      name: v.string(),
+      meaning: v.string(),
+      fromConfig: v.optional(v.boolean()),
+    }),
+  ),
 });
 
 export type PreviewGroup = v.InferOutput<typeof PreviewGroup>;
@@ -58,8 +66,13 @@ export function previewGroups(groups: ResolvedGroup[]): PreviewGroup[] {
     choice: g.choice,
     min: g.min,
     ...(g.max === undefined ? {} : { max: g.max }),
+    over: g.over,
     threshold: g.threshold,
-    labels: g.labels,
+    labels: g.labels.map((l) => ({
+      name: l.name,
+      meaning: l.meaning,
+      fromConfig: l.fromConfig,
+    })),
   }));
 }
 

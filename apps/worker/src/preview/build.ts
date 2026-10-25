@@ -1,5 +1,6 @@
 import {
   decideLabels,
+  labelFacts,
   labelRequest,
   labelScores,
   parseConfig,
@@ -114,7 +115,12 @@ export async function buildPreview(deps: BuildDeps): Promise<BuildResult> {
         labels: listedItem.labels.map((l) => l.name),
         inputTokens: response.usage.input_tokens,
         scores,
-        decisions: decideLabels(groups, scores, []),
+        decisions: decideLabels(
+          groups,
+          scores,
+          [],
+          labelFacts(groups, item, response.answers),
+        ),
       };
     },
   );

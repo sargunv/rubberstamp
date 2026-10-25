@@ -21,5 +21,11 @@ export function useReadyRepo() {
   // The server only calls a repository ready once its config parses.
   if (!parsed.ok) throw new Error(`${name}'s config doesn't parse`);
   const colors = new Map(status.config.labels.map((l) => [l.name, l.color]));
-  return { repo: name, status, config: parsed.config, colors };
+  return {
+    repo: name,
+    status,
+    config: parsed.config,
+    upgraded: parsed.upgraded,
+    colors,
+  };
 }

@@ -53,6 +53,11 @@ export function changeCount(diff: LabelChange[]) {
 
 /** How many labels a group takes, in words. */
 export function requirement(group: Group): string {
+  const count = cardinality(group);
+  return group.over === "none" ? `${count}, or none if more pass` : count;
+}
+
+function cardinality(group: Group): string {
   const { min, max } = group;
   if (max === 1) return min > 0 ? "Exactly one" : "At most one";
   if (min > 0 && max !== undefined) return `${min} to ${max}`;

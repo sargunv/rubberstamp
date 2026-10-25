@@ -1,4 +1,5 @@
 import {
+  askScores,
   changedPaths,
   changedSince,
   ciConfigHash,
@@ -8,6 +9,7 @@ import {
   noUnit,
   parseConfig,
   planRequests,
+  unitAsks,
   unitScores,
   type Config,
   type PullFile,
@@ -217,8 +219,9 @@ async function judge(
       return fallback("selection failed");
     }
     const scores = unitScores(group, answers);
-    if (scores === null) return fallback("selection failed");
-    decide(decideUnits(group, scores, changedPaths(changed), since));
+    const asks = askScores(unitAsks(group), answers);
+    if (scores === null || asks === null) return fallback("selection failed");
+    decide(decideUnits(group, scores, asks, changedPaths(changed), since));
   }
 
   return {

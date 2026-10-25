@@ -1,5 +1,6 @@
 import {
   decideLabels,
+  labelFacts,
   labelRequest,
   labelScores,
   parseConfig,
@@ -106,7 +107,8 @@ export async function runLabelJob(
       const scores = labelScores(groups, response.answers);
       // Read the labels again in case someone labeled the item while Jev judged it.
       const present = (await repo.issue(job.number)).labels.map((l) => l.name);
-      const decisions = decideLabels(groups, scores, present);
+      const facts = labelFacts(groups, item, response.answers);
+      const decisions = decideLabels(groups, scores, present, facts);
       const added = decisions.filter((d) => d.add).map((d) => d.label);
       if (added.length > 0) await repo.addLabels(job.number, added);
 

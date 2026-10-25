@@ -19,6 +19,14 @@ type Decision = {
   rule: string;
 };
 
+// Notes about the group as a whole, rather than the rule that decided a label.
+const GROUP_NOTES = new Set([
+  "filled to min",
+  "group labeled",
+  "present",
+  "cut by max",
+  "over max",
+]);
 /** Ruled rows of items, numbered in a red margin like a ledger. */
 export function Ledger({
   column = "Labels",
@@ -177,10 +185,8 @@ function GroupScores({
 }) {
   const meanings = new Map(group.labels.map((l) => [l.name, l.meaning]));
   const sorted = decisions.toSorted((a, b) => b.score - a.score);
-  const note =
-    sorted.find((d) => d.add && d.rule)?.rule ??
-    sorted.find((d) => d.rule === "group labeled" || d.rule === "present")
-      ?.rule;
+  const note = sorted.find((d) => GROUP_NOTES.has(d.rule))?.rule;
+  const ruled = sorted.filter((d) => d.rule && !GROUP_NOTES.has(d.rule));
   return (
     <section>
       <h3 className="flex items-baseline justify-between gap-3 border-b border-rule pb-1">
@@ -228,7 +234,17 @@ function GroupScores({
           More passed than the maximum of {group.max}, so the least likely were
           left off.
         </p>
+      ) : note === "over max" ? (
+        <p className="mt-2 text-xs text-muted">
+          More passed than the maximum of {group.max}, so none were added.
+        </p>
       ) : null}
+      {ruled.map((d) => (
+        <p key={d.label} className="mt-2 text-xs text-muted">
+          <span className="font-mono text-ink">{d.label}</span>{" "}
+          {d.add ? "applied" : "skipped"} by {d.rule}.
+        </p>
+      ))}
     </section>
   );
 }

@@ -2,10 +2,24 @@ import type { Config } from "./config.ts";
 import { squash } from "./describe.ts";
 import { glob } from "./glob.ts";
 import type { Answer, Json, Question } from "./jev.ts";
+import {
+  askQuestions,
+  firstRule,
+  ruleAsks,
+  type Facts,
+  type Rule,
+  type Verdict,
+} from "./rules.ts";
 
 export type RepoLabel = { name: string; description: string | null };
 
-export type ResolvedLabel = { name: string; meaning: string };
+export type ResolvedLabel = {
+  name: string;
+  meaning: string;
+  /** Whether the meaning comes from the config rather than GitHub. */
+  fromConfig: boolean;
+  rules: Rule[];
+};
 
 export type ResolvedGroup = {
   id: string;
@@ -13,8 +27,12 @@ export type ResolvedGroup = {
   choice: boolean;
   min: number;
   max: number | undefined;
-  rule: string | undefined;
+  /** Whether more passing labels than `max` are cut to it or all left off. */
+  over: "cut" | "none";
+  guidance: string | undefined;
   threshold: number;
+  /** Checked before each label's own rules. */
+  rules: Rule[];
   labels: ResolvedLabel[];
 };
 
@@ -26,7 +44,11 @@ export type Resolution = { groups: ResolvedGroup[]; warnings: string[] };
 const DEFAULT_THRESHOLD = { choice: 0.5, noul: 0.5 };
 export const NONE = "none of these";
 
-/** Match the configured groups against the labels that exist on the repo. */
+/**
+ * Match the configured groups against the labels that exist on the repo. A
+ * label takes its entry under its exact name, or else under the first pattern
+ * that matches it.
+ */
 export function resolveLabels(
   config: Config,
   repoLabels: RepoLabel[],
@@ -34,18 +56,16 @@ export function resolveLabels(
   const section = config.labels;
   if (!section) return { groups: [], warnings: [] };
   const warnings: string[] = [];
-  const describe = new Map(
-    Object.entries(section.describe).map(([name, text]) => [
-      name.toLowerCase(),
-      text,
-    ]),
-  );
   const claimed = new Map<string, string>();
   const groups: ResolvedGroup[] = [];
 
   for (const [id, group] of Object.entries(section.groups)) {
+    const entries = Object.entries(group.labels);
+    const exact = new Map(
+      entries.map(([key, entry]) => [key.toLowerCase(), entry]),
+    );
     const labels: ResolvedLabel[] = [];
-    for (const pattern of group.labels) {
+    for (const [pattern, patternEntry] of entries) {
       const matches = repoLabels.filter((label) =>
         glob(pattern, { ignoreCase: true })(label.name),
       );
@@ -63,13 +83,19 @@ export function resolveLabels(
           continue;
         }
         claimed.set(key, id);
-        const meaning = describe.get(key) ?? label.description ?? "";
+        const entry = exact.get(key) ?? patternEntry;
+        const meaning = entry.meaning ?? label.description ?? "";
         if (!meaning.trim()) {
           warnings.push(
             `Label ${label.name} has no description, so Jev sees only its name.`,
           );
         }
-        labels.push({ name: label.name, meaning: squash(meaning) });
+        labels.push({
+          name: label.name,
+          meaning: squash(meaning),
+          fromConfig: entry.meaning !== undefined,
+          rules: entry.rules,
+        });
       }
     }
     if (labels.length === 0) continue;
@@ -84,19 +110,26 @@ export function resolveLabels(
       choice,
       min: group.min,
       max: group.max,
-      rule: group.rule === undefined ? undefined : squash(group.rule),
+      over: group.over,
+      guidance:
+        group.guidance === undefined ? undefined : squash(group.guidance),
       threshold:
         group.threshold ?? DEFAULT_THRESHOLD[choice ? "choice" : "noul"],
+      rules: group.rules,
       labels,
     });
   }
-
-  for (const name of describe.keys()) {
-    if (!claimed.has(name)) {
-      warnings.push(`describe.${name} names a label that is in no group.`);
-    }
-  }
   return { groups, warnings };
+}
+
+/** The questions every group's and label's rules ask, each once. */
+export function labelAsks(groups: ResolvedGroup[]): string[] {
+  return ruleAsks(
+    groups.flatMap((group) => [
+      ...group.rules,
+      ...group.labels.flatMap((label) => label.rules),
+    ]),
+  );
 }
 
 export function groupQuestionKey(group: ResolvedGroup): string {
@@ -112,7 +145,9 @@ export function labelQuestions(
 ): Record<string, Question> {
   const questions: Record<string, Question> = {};
   for (const group of groups) {
-    const rule: Record<string, Json> = group.rule ? { rule: group.rule } : {};
+    const guidance: Record<string, Json> = group.guidance
+      ? { guidance: group.guidance }
+      : {};
     if (group.choice) {
       const criteria: Record<string, Json> = Object.fromEntries(
         group.labels.map((label) => [label.name, label.meaning || label.name]),
@@ -126,7 +161,7 @@ export function labelQuestions(
           question:
             "Which label best describes this issue or pull request? Judge the " +
             "work it reports, requests, or makes, not the files it touches.",
-          ...rule,
+          ...guidance,
         },
         criteria,
       };
@@ -141,7 +176,7 @@ export function labelQuestions(
             "label? A maintainer searching for that label would expect to " +
             "find it.",
           label: label.meaning || label.name,
-          ...rule,
+          ...guidance,
         },
         criteria: {
           true: "What the label describes is a subject of this work.",
@@ -152,7 +187,7 @@ export function labelQuestions(
       };
     }
   }
-  return questions;
+  return { ...questions, ...askQuestions(labelAsks(groups)) };
 }
 
 /** Each label's probability, keyed by label name. */
@@ -187,20 +222,26 @@ export type LabelDecision = {
   group: string;
   add: boolean;
   score: number;
-  rule: "" | "present" | "group labeled" | "filled to min" | "cut by max";
+  /**
+   * Why the score alone didn't decide: "present", "group labeled", "filled to
+   * min", "cut by max", "over max", or the rule that applied or skipped it.
+   */
+  rule: string;
 };
 
 /**
  * Decide which labels to add. A group gets labels only when it has none, so a
- * label that a template, a bot, or a person set always wins. Labels at or above
- * the threshold pass; the most likely of the rest fill the group to its `min`,
- * and the least likely passing ones are cut to its `max`.
+ * label that a template, a bot, or a person set always wins. The group's rules,
+ * then the label's, can apply or skip a label outright; otherwise it passes at
+ * or above the threshold. Passing labels over the group's `max` are cut to it,
+ * least likely first, or all left off for `over: none`. The most likely labels
+ * that no rule skipped then fill the group to its `min`.
  */
 export function decideLabels(
   groups: ResolvedGroup[],
   scores: Scores,
   present: Iterable<string>,
-  thresholds: Record<string, number> = {},
+  facts: Facts,
 ): LabelDecision[] {
   const existing = new Set([...present].map((name) => name.toLowerCase()));
   const decisions: LabelDecision[] = [];
@@ -220,23 +261,48 @@ export function decideLabels(
       }
       continue;
     }
-    const threshold = thresholds[group.id] ?? group.threshold;
-    const ranked = [...group.labels].sort((a, b) => score(b) - score(a));
-    const passing = ranked.filter((label) => score(label) >= threshold);
-    const kept = new Set(passing.slice(0, group.max));
+    const verdicts = new Map<ResolvedLabel, Verdict | undefined>(
+      group.labels.map((label) => [
+        label,
+        firstRule(group.rules, facts, (i) => `group rule ${i + 1}`) ??
+          firstRule(label.rules, facts, (i) => `label rule ${i + 1}`),
+      ]),
+    );
+    const verdict = (label: ResolvedLabel) => verdicts.get(label)?.then;
+    // Labels a rule applies rank ahead of those that only passed.
+    const ranked = [...group.labels].sort(
+      (a, b) =>
+        Number(verdict(b) === "apply") - Number(verdict(a) === "apply") ||
+        score(b) - score(a),
+    );
+    const passing = ranked.filter(
+      (label) =>
+        verdict(label) === "apply" ||
+        (verdict(label) === undefined && score(label) >= group.threshold),
+    );
+    const over = group.max !== undefined && passing.length > group.max;
+    const kept = new Set(
+      over && group.over === "none" ? [] : passing.slice(0, group.max),
+    );
     const filled = new Set(
       ranked
-        .filter((label) => !kept.has(label))
+        .filter((label) => !kept.has(label) && verdict(label) !== "skip")
         .slice(0, Math.max(0, group.min - kept.size)),
     );
     for (const label of group.labels) {
-      const cut = passing.includes(label) && !kept.has(label);
+      const dropped = passing.includes(label) && !kept.has(label);
       decisions.push({
         label: label.name,
         group: group.id,
         add: kept.has(label) || filled.has(label),
         score: score(label),
-        rule: filled.has(label) ? "filled to min" : cut ? "cut by max" : "",
+        rule: filled.has(label)
+          ? "filled to min"
+          : dropped
+            ? group.over === "none"
+              ? "over max"
+              : "cut by max"
+            : (verdicts.get(label)?.why ?? ""),
       });
     }
   }

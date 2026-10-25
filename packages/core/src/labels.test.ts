@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { parseConfig, type Config } from "./config.ts";
+import type { Item } from "./describe.ts";
 import type { Answer } from "./jev.ts";
-import { labelRequest } from "./labeling.ts";
+import { labelFacts, labelRequest } from "./labeling.ts";
 import {
   decideLabels,
   labelScores,
@@ -10,6 +11,7 @@ import {
   resolveLabels,
   type RepoLabel,
 } from "./labels.ts";
+import type { Facts } from "./rules.ts";
 
 const REPO_LABELS: RepoLabel[] = [
   { name: "bug", description: "Something is broken" },
@@ -22,6 +24,8 @@ const REPO_LABELS: RepoLabel[] = [
   { name: "binding:swift", description: "The Swift binding" },
   { name: "good first issue", description: "Good for newcomers" },
 ];
+
+const ISSUE: Facts = { kind: "issue", paths: [], asks: {} };
 
 const SOURCE = `
 context: |
@@ -99,15 +103,18 @@ describe("resolveLabels", () => {
     expect(groups.map((g) => g.threshold)).toEqual([0.5, 0.5, 0.7]);
   });
 
-  it("warns about missing labels, duplicates, and stray descriptions", () => {
+  it("warns about missing labels and duplicates", () => {
     const { groups, warnings } = resolveLabels(
       config(`
+version: 1
 labels:
   groups:
-    a: { labels: [bug, "platform:*"] }
+    a:
+      labels:
+        bug: ~
+        "platform:*": ~
+        nope: Not a label.
     b: { labels: [bug, chore] }
-  describe:
-    nope: Not a label.
 `),
       REPO_LABELS,
     );
@@ -117,8 +124,8 @@ labels:
     ]);
     expect(warnings).toEqual([
       'Group a: no repository label matches "platform:*".',
+      'Group a: no repository label matches "nope".',
       "Label bug is in groups a and b; it stays in a.",
-      "describe.nope names a label that is in no group.",
     ]);
   });
 });
@@ -153,7 +160,7 @@ describe("labelRequest", () => {
     expect(
       request.questions["label:binding:kotlin"]?.instructions,
     ).toMatchObject({
-      rule: "Only when specific to this binding.",
+      guidance: "Only when specific to this binding.",
     });
   });
 
@@ -204,8 +211,8 @@ describe("decideLabels", () => {
     "label:binding:swift": { type: "noul", noul: 0.2 },
   };
   const scores = labelScores(groups, answers);
-  const added = (present: string[], thresholds = {}) =>
-    decideLabels(groups, scores, present, thresholds)
+  const added = (present: string[]) =>
+    decideLabels(groups, scores, present, ISSUE)
       .filter((d) => d.add)
       .map((d) => `${d.label}${d.rule ? ` (${d.rule})` : ""}`);
 
@@ -233,7 +240,7 @@ labels:
 `),
       REPO_LABELS,
     ).groups;
-    const decisions = decideLabels(capped, scores, []);
+    const decisions = decideLabels(capped, scores, [], ISSUE);
     expect(
       decisions.filter((d) => d.add || d.rule).map((d) => [d.label, d.rule]),
     ).toEqual([
@@ -255,11 +262,128 @@ labels:
       ).warnings,
     ).toEqual(["Group b needs 3 labels but only 2 exist."]);
   });
+});
 
-  it("applies threshold overrides per group", () => {
-    expect(added([], { kind: 0.8, area: 0.4, binding: 0.9 })).toEqual([
-      "bug (filled to min)",
-      "area:map",
+describe("rules", () => {
+  const RULES = `
+version: 1
+labels:
+  groups:
+    area:
+      min: 1
+      labels:
+        "area:*": ~
+        area:docs:
+          rules: [{ then: skip }]
+    binding:
+      labels:
+        "binding:*": ~
+        binding:kotlin:
+          meaning: The Kotlin binding, from the config.
+          rules:
+            - { if: { files: [bindings/kotlin/*] }, then: apply }
+      rules:
+        - if: { kind: pr }
+          unless: { ask: &specific Is this about particular bindings?, threshold: 0.3 }
+          then: skip
+        - { if: { kind: issue }, unless: { ask: *specific }, then: skip }
+`;
+  const { groups } = resolveLabels(config(RULES), REPO_LABELS);
+  const scores = {
+    "area:map": 0.1,
+    "area:render": 0.2,
+    "Area:Docs": 0.9,
+    "binding:kotlin": 0.2,
+    "binding:swift": 0.8,
+  };
+  const pr: Item = {
+    type: "pull request",
+    title: "",
+    body: null,
+    files: [
+      {
+        filename: "bindings/kotlin/a.kt",
+        status: "modified",
+        additions: 1,
+        deletions: 0,
+      },
+    ],
+  };
+  const decide = (item: Item, specific: number) => {
+    const request = labelRequest(config(RULES), groups, item, "m");
+    expect(
+      Object.keys(request.questions).filter((k) => k.startsWith("ask:")),
+    ).toEqual(["ask:1"]);
+    const facts = labelFacts(groups, item, {
+      "ask:1": { type: "noul", noul: specific },
+    });
+    return decideLabels(groups, scores, [], facts)
+      .filter((d) => d.add || d.rule)
+      .map(
+        (d) => `${d.add ? "+" : "-"}${d.label}${d.rule ? ` (${d.rule})` : ""}`,
+      );
+  };
+
+  it("takes a label's exact entry over its pattern's", () => {
+    const kotlin = groups[1]?.labels.find((l) => l.name === "binding:kotlin");
+    expect(kotlin).toMatchObject({
+      meaning: "The Kotlin binding, from the config.",
+      fromConfig: true,
+    });
+    expect(
+      groups[1]?.labels.find((l) => l.name === "binding:swift")?.fromConfig,
+    ).toBe(false);
+  });
+
+  it("checks group rules before label rules, and never fills with a skipped label", () => {
+    expect(decide(pr, 0.4)).toEqual([
+      "+area:render (filled to min)",
+      "-Area:Docs (label rule 1)",
+      "+binding:kotlin (label rule 1, matching bindings/kotlin/*)",
+      "+binding:swift",
+    ]);
+    expect(decide(pr, 0.2)).toEqual([
+      "+area:render (filled to min)",
+      "-Area:Docs (label rule 1)",
+      "-binding:kotlin (group rule 1)",
+      "-binding:swift (group rule 1)",
+    ]);
+  });
+
+  it("judges issues by their own rules and never matches files on them", () => {
+    const issue: Item = { type: "issue", title: "", body: null };
+    expect(decide(issue, 0.4)).toEqual([
+      "+area:render (filled to min)",
+      "-Area:Docs (label rule 1)",
+      "-binding:kotlin (group rule 2)",
+      "-binding:swift (group rule 2)",
+    ]);
+    expect(decide(issue, 0.6)).toEqual([
+      "+area:render (filled to min)",
+      "-Area:Docs (label rule 1)",
+      "+binding:swift",
+    ]);
+  });
+
+  it("adds none of a group's labels when more pass than max with over: none", () => {
+    const capped = resolveLabels(
+      config(`
+version: 1
+labels:
+  groups:
+    binding: { labels: ["binding:*"], max: 1, over: none, threshold: 0.1 }
+`),
+      REPO_LABELS,
+    ).groups;
+    expect(
+      decideLabels(capped, scores, [], ISSUE).map((d) => [
+        d.label,
+        d.add,
+        d.rule,
+      ]),
+    ).toEqual([
+      ["binding:kotlin", false, "over max"],
+      ["binding:swift", false, "over max"],
     ]);
   });
 });
